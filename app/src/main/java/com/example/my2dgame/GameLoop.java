@@ -50,17 +50,27 @@ public class GameLoop extends Thread {
         int frameCount = 0;
 
         long startTime = System.currentTimeMillis();
-        long elapsedTime;
-        long sleepTime;
+        long previousTime = startTime;
+        double accumulatedTime = 0;
 
         Canvas canvas = null;
         while (isRunning) {
+            long currentTime = System.currentTimeMillis();
+            long dt = currentTime - previousTime;
+            previousTime = currentTime;
+            accumulatedTime += dt;
+
+            // Fixed-step game logic updates
+            while (accumulatedTime >= UPS_PERIOD) {
+                game.update();
+                updateCount++;
+                accumulatedTime -= UPS_PERIOD;
+            }
+
+            // Render a frame every iteration (FPS decoupled from UPS)
             try {
                 canvas = surfaceHolder.lockCanvas();
                 synchronized (surfaceHolder) {
-                    game.update();
-                    updateCount++;
-
                     game.draw(canvas);
                 }
             } catch (Exception e) {
@@ -76,31 +86,15 @@ public class GameLoop extends Thread {
                 }
             }
 
-            elapsedTime = System.currentTimeMillis() - startTime;
-            sleepTime = (long) (updateCount * UPS_PERIOD - elapsedTime);
-            if (sleepTime > 0) {
-                try {
-                    sleep(sleepTime);
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-            }
-
-            while (sleepTime < 0 && updateCount < MAX_UPS - 1) {
-                game.update();
-                updateCount++;
-                elapsedTime += System.currentTimeMillis() - startTime;
-                sleepTime = (long) (updateCount * UPS_PERIOD - elapsedTime);
-            }
-
-            elapsedTime += System.currentTimeMillis() - startTime;
-            if (elapsedTime >= 1000) {
-                averageUPS = updateCount / (1E-3 * elapsedTime);
-                averageFPS = frameCount / (1E-3 * elapsedTime);
+            // Calculate and log averages every second
+            long elapsed = currentTime - startTime;
+            if (elapsed >= 1000) {
+                averageUPS = updateCount / (elapsed / 1000.0);
+                averageFPS = frameCount / (elapsed / 1000.0);
                 Log.d("GameLoop", "FPS: " + averageFPS + " UPS: " + averageUPS);
                 updateCount = 0;
                 frameCount = 0;
-                startTime = System.currentTimeMillis();
+                startTime = currentTime;
             }
         }
     }
