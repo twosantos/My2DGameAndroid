@@ -16,9 +16,12 @@ import com.example.my2dgame.object.Player;
 public class Game extends SurfaceView implements SurfaceHolder.Callback {
 
     private final GameLoop gameLoop;
-    private final Joystick joystick;
-    private final Enemy enemy;
+    private final Paint statsPaint;
+    private Joystick joystick;
+    private Enemy enemy;
     private Player player;
+    private int screenWidth;
+    private int screenHeight;
 
     public Game(Context context) {
         super(context);
@@ -28,14 +31,9 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
 
         gameLoop = new GameLoop(this, surfaceHolder);
 
-        joystick = new Joystick(
-                275,
-                700,
-                70,
-                40
-        );
-        player = new Player(context, joystick, 2*500, 500, 30);
-        enemy = new Enemy(context, player, 500, 100, 25);
+        statsPaint = new Paint();
+        statsPaint.setColor(ContextCompat.getColor(context, R.color.magenta));
+        statsPaint.setTextSize(50);
 
         setFocusable(true);
     }
@@ -60,6 +58,30 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
 
     @Override
     public void surfaceCreated(@NonNull SurfaceHolder surfaceHolder) {
+        screenWidth = getWidth();
+        screenHeight = getHeight();
+
+        joystick = new Joystick(
+                (int) (screenWidth * 0.12),
+                (int) (screenHeight * 0.75),
+                (int) (screenHeight * 0.08),
+                (int) (screenHeight * 0.045)
+        );
+        player = new Player(
+                getContext(),
+                joystick,
+                screenWidth / 2.0,
+                screenHeight / 2.0,
+                (float) (screenHeight * 0.035)
+        );
+        enemy = new Enemy(
+                getContext(),
+                player,
+                screenWidth * 0.25,
+                screenHeight * 0.15,
+                (float) (screenHeight * 0.03)
+        );
+
         gameLoop.startLoop();
     }
 
@@ -70,7 +92,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
 
     @Override
     public void surfaceDestroyed(@NonNull SurfaceHolder surfaceHolder) {
-
+        gameLoop.stopLoop();
     }
 
     @Override
@@ -85,25 +107,21 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
 
     public void drawUPS(Canvas canvas) {
         String averageUPS = Double.toString(gameLoop.getAverageUPS());
-        Paint paint = new Paint();
-        int color = ContextCompat.getColor(getContext(), R.color.magenta);
-        paint.setColor(color);
-        paint.setTextSize(50);
-        canvas.drawText("UPS " + averageUPS, 100, 100, paint);
+        canvas.drawText("UPS " + averageUPS, 100, 100, statsPaint);
     }
 
     public void drawFPS(Canvas canvas) {
         String averageFPS = Double.toString(gameLoop.getAverageFPS());
-        Paint paint = new Paint();
-        int color = ContextCompat.getColor(getContext(), R.color.magenta);
-        paint.setColor(color);
-        paint.setTextSize(50);
-        canvas.drawText("FPS " + averageFPS, 100, 200, paint);
+        canvas.drawText("FPS " + averageFPS, 100, 200, statsPaint);
     }
 
     public void update() {
         joystick.update();
         player.update();
         enemy.update();
+
+        // Clamp objects to screen bounds
+        player.clampToScreen(screenWidth, screenHeight);
+        enemy.clampToScreen(screenWidth, screenHeight);
     }
 }

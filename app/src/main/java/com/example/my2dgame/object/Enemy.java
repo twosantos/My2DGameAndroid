@@ -21,19 +21,16 @@ public class Enemy extends Circle {
 
     @Override
     public void update() {
-        // we need to make the velocity of the enemy facing the player
         double distanceToTargetX = player.positionX() - positionX;
         double distanceToTargetY = player.positionY() - positionY;
 
-        double distanceToTarget = GameObject.getDistanceBetweenObjects(this,player);
+        double distanceToTarget = GameObject.getDistanceBetweenObjects(this, player);
 
-        double directionX = distanceToTargetX/distanceToTarget;
-        double directionY = distanceToTargetY/distanceToTarget;
-
-        Log.println(Log.DEBUG, "enemy info", "enemy distance to target is: " + distanceToTarget);
-        if (Math.floor(distanceToTarget) > 1) {
-            velocityX = directionX*MAX_SPEED;
-            velocityY = directionY*MAX_SPEED;
+        if (distanceToTarget > 1) {
+            double directionX = distanceToTargetX / distanceToTarget;
+            double directionY = distanceToTargetY / distanceToTarget;
+            velocityX = directionX * MAX_SPEED;
+            velocityY = directionY * MAX_SPEED;
         } else {
             velocityX = 0;
             velocityY = 0;

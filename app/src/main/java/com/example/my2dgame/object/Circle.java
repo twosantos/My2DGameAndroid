@@ -22,8 +22,22 @@ public abstract class Circle extends GameObject {
         paint.setColor(color);
     }
 
+    public float getRadius() {
+        return radius;
+    }
+
     public void draw(Canvas canvas) {
         canvas.drawCircle((float) positionX, (float) positionY, radius, paint);
+    }
+
+    /**
+     * Clamp position so the circle stays within screen bounds.
+     */
+    public void clampToScreen(int screenWidth, int screenHeight) {
+        if (positionX - radius < 0) positionX = radius;
+        if (positionX + radius > screenWidth) positionX = screenWidth - radius;
+        if (positionY - radius < 0) positionY = radius;
+        if (positionY + radius > screenHeight) positionY = screenHeight - radius;
     }
 
 }
