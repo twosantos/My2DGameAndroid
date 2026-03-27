@@ -33,6 +33,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
     private final Paint healthBarPaint;
     private final Paint healthBarBgPaint;
     private final Random random = new Random();
+    private final SoundManager soundManager;
 
     private Joystick joystick;
     private Player player;
@@ -76,6 +77,9 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         healthBarBgPaint = new Paint();
         healthBarBgPaint.setColor(ContextCompat.getColor(context, R.color.health_bar_bg));
 
+        soundManager = new SoundManager(context);
+        soundManager.startMusic();
+
         setFocusable(true);
     }
 
@@ -115,6 +119,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         spawnTimer = 0;
         joystick.notPressed();
         gameState = GameState.PLAYING;
+        soundManager.playStart();
     }
 
     @Override
@@ -146,6 +151,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
     @Override
     public void surfaceDestroyed(@NonNull SurfaceHolder surfaceHolder) {
         gameLoop.stopLoop();
+        soundManager.release();
     }
 
     @Override
@@ -246,11 +252,13 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
             if (Circle.isColliding(player, enemy)) {
                 player.takeDamage();
                 iterator.remove();
+                soundManager.playHit();
             }
         }
 
         if (!player.isAlive()) {
             gameState = GameState.GAME_OVER;
+            soundManager.playGameOver();
             return;
         }
 
