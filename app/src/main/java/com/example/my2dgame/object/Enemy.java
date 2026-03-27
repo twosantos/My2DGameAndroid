@@ -1,7 +1,6 @@
 package com.example.my2dgame.object;
 
 import android.content.Context;
-import android.util.Log;
 
 import androidx.core.content.ContextCompat;
 

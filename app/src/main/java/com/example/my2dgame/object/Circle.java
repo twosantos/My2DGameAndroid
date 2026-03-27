@@ -26,6 +26,14 @@ public abstract class Circle extends GameObject {
         return radius;
     }
 
+    /**
+     * Check if two circles are overlapping.
+     */
+    public static boolean isColliding(Circle c1, Circle c2) {
+        double distance = getDistanceBetweenObjects(c1, c2);
+        return distance < c1.radius + c2.radius;
+    }
+
     public void draw(Canvas canvas) {
         canvas.drawCircle((float) positionX, (float) positionY, radius, paint);
     }

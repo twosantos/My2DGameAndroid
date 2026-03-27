@@ -10,4 +10,5 @@
     <color name="magenta">#FF00FF</color>
     <color name="player">#EADDCA</color>
     <color name="enemy">#FF0000</color>
+    <color name="health_bar_bg">#555555</color>
 </resources>
