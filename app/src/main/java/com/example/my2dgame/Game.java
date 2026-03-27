@@ -1,6 +1,7 @@
 package com.example.my2dgame;
 
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
@@ -42,6 +43,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
     private final Paint pauseButtonPaint;
     private final Random random = new Random();
     private final SoundManager soundManager;
+    private final SharedPreferences prefs;
 
     private Joystick joystick;
     private Player player;
@@ -56,6 +58,8 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
     private int spawnTimer = 0;
     private int fireTimer = 0;
     private int damageFlashTimer = 0;
+    private int highScore;
+    private boolean isNewHighScore = false;
 
     public Game(Context context) {
         super(context);
@@ -98,6 +102,9 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
 
         soundManager = new SoundManager(context);
         soundManager.startMusic();
+
+        prefs = context.getSharedPreferences("my2dgame", Context.MODE_PRIVATE);
+        highScore = prefs.getInt("high_score", 0);
 
         setFocusable(true);
     }
@@ -215,8 +222,11 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
 
     private void drawMenu(Canvas canvas) {
         canvas.drawColor(Color.BLACK);
-        canvas.drawText("My2DGame", screenWidth / 2f, screenHeight / 2f - 50, titlePaint);
-        canvas.drawText("Tap to Start", screenWidth / 2f, screenHeight / 2f + 60, subtitlePaint);
+        canvas.drawText("My2DGame", screenWidth / 2f, screenHeight / 2f - 80, titlePaint);
+        canvas.drawText("Tap to Start", screenWidth / 2f, screenHeight / 2f + 30, subtitlePaint);
+        if (highScore > 0) {
+            canvas.drawText("High Score: " + highScore, screenWidth / 2f, screenHeight / 2f + 120, subtitlePaint);
+        }
     }
 
     private void drawPlaying(Canvas canvas) {
@@ -264,9 +274,14 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
 
     private void drawGameOver(Canvas canvas) {
         canvas.drawColor(Color.BLACK);
-        canvas.drawText("Game Over", screenWidth / 2f, screenHeight / 2f - 80, titlePaint);
-        canvas.drawText("Score: " + score, screenWidth / 2f, screenHeight / 2f + 40, subtitlePaint);
-        canvas.drawText("Tap to Restart", screenWidth / 2f, screenHeight / 2f + 140, subtitlePaint);
+        canvas.drawText("Game Over", screenWidth / 2f, screenHeight / 2f - 100, titlePaint);
+        canvas.drawText("Score: " + score, screenWidth / 2f, screenHeight / 2f + 20, subtitlePaint);
+        if (isNewHighScore) {
+            canvas.drawText("New High Score!", screenWidth / 2f, screenHeight / 2f + 100, subtitlePaint);
+        } else {
+            canvas.drawText("High Score: " + highScore, screenWidth / 2f, screenHeight / 2f + 100, subtitlePaint);
+        }
+        canvas.drawText("Tap to Restart", screenWidth / 2f, screenHeight / 2f + 180, subtitlePaint);
     }
 
     private void drawHealthBar(Canvas canvas) {
@@ -384,6 +399,11 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
 
         if (!player.isAlive()) {
             gameState = GameState.GAME_OVER;
+            isNewHighScore = score > highScore;
+            if (isNewHighScore) {
+                highScore = score;
+                prefs.edit().putInt("high_score", highScore).apply();
+            }
             soundManager.playGameOver();
             return;
         }
@@ -404,8 +424,18 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         }
     }
 
+    private EnemyType pickEnemyType() {
+        int roll = random.nextInt(100);
+        if (score >= 30 && roll < 15) return EnemyType.ZIGZAG;
+        if (score >= 20 && roll < 30) return EnemyType.TANK;
+        if (score >= 10 && roll < 50) return EnemyType.FAST;
+        return EnemyType.NORMAL;
+    }
+
     private void spawnEnemy() {
-        float enemyRadius = (float) (screenHeight * 0.03);
+        EnemyType type = pickEnemyType();
+        float baseRadius = (float) (screenHeight * 0.03);
+        float enemyRadius = (float) (baseRadius * type.getSizeMultiplier());
         double x, y;
         int edge = random.nextInt(4);
         switch (edge) {
@@ -426,6 +456,6 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
                 y = random.nextDouble() * screenHeight;
                 break;
         }
-        enemies.add(new Enemy(getContext(), player, x, y, enemyRadius));
+        enemies.add(new Enemy(type.getColor(), player, x, y, enemyRadius, type));
     }
 }
