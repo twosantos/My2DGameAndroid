@@ -14,6 +14,7 @@ import androidx.core.content.ContextCompat;
 import com.example.my2dgame.object.Circle;
 import com.example.my2dgame.object.Enemy;
 import com.example.my2dgame.object.Player;
+import com.example.my2dgame.object.Projectile;
 
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -24,6 +25,11 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
 
     private static final int INITIAL_SPAWN_INTERVAL = 90; // 3 seconds at 30 UPS
     private static final int MIN_SPAWN_INTERVAL = 20;
+    private static final int FIRE_INTERVAL = 10; // auto-fire every 0.33s at 30 UPS
+    private static final int DAMAGE_FLASH_DURATION = 6; // frames (~0.2s at 30 UPS)
+    private static final int KILL_SCORE_BONUS = 3;
+    private static final int PAUSE_BUTTON_SIZE = 80;
+    private static final int PAUSE_BUTTON_MARGIN = 20;
 
     private final GameLoop gameLoop;
     private final Paint statsPaint;
@@ -32,12 +38,15 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
     private final Paint scorePaint;
     private final Paint healthBarPaint;
     private final Paint healthBarBgPaint;
+    private final Paint damageFlashPaint;
+    private final Paint pauseButtonPaint;
     private final Random random = new Random();
     private final SoundManager soundManager;
 
     private Joystick joystick;
     private Player player;
     private final List<Enemy> enemies = new ArrayList<>();
+    private final List<Projectile> projectiles = new ArrayList<>();
     private int screenWidth;
     private int screenHeight;
 
@@ -45,6 +54,8 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
     private int score = 0;
     private int scoreTimer = 0;
     private int spawnTimer = 0;
+    private int fireTimer = 0;
+    private int damageFlashTimer = 0;
 
     public Game(Context context) {
         super(context);
@@ -71,11 +82,19 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         scorePaint = new Paint();
         scorePaint.setColor(Color.WHITE);
         scorePaint.setTextSize(50);
-        scorePaint.setTextAlign(Paint.Align.RIGHT);
+        scorePaint.setTextAlign(Paint.Align.CENTER);
 
         healthBarPaint = new Paint();
         healthBarBgPaint = new Paint();
         healthBarBgPaint.setColor(ContextCompat.getColor(context, R.color.health_bar_bg));
+
+        damageFlashPaint = new Paint();
+        damageFlashPaint.setColor(Color.RED);
+        damageFlashPaint.setAlpha(100);
+
+        pauseButtonPaint = new Paint();
+        pauseButtonPaint.setColor(Color.WHITE);
+        pauseButtonPaint.setAlpha(180);
 
         soundManager = new SoundManager(context);
         soundManager.startMusic();
@@ -95,6 +114,11 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
             case PLAYING:
                 switch (event.getAction()) {
                     case MotionEvent.ACTION_DOWN:
+                        if (isTouchOnPauseButton(event.getX(), event.getY())) {
+                            gameState = GameState.PAUSED;
+                            joystick.notPressed();
+                            return true;
+                        }
                         joystick.pressed((double) event.getX(), (double) event.getY());
                         return true;
                     case MotionEvent.ACTION_MOVE:
@@ -107,16 +131,31 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
                         return true;
                 }
                 break;
+            case PAUSED:
+                if (event.getAction() == MotionEvent.ACTION_DOWN) {
+                    gameState = GameState.PLAYING;
+                }
+                return true;
         }
         return super.onTouchEvent(event);
+    }
+
+    private boolean isTouchOnPauseButton(float x, float y) {
+        float btnX = screenWidth - PAUSE_BUTTON_SIZE - PAUSE_BUTTON_MARGIN;
+        float btnY = PAUSE_BUTTON_MARGIN;
+        return x >= btnX && x <= btnX + PAUSE_BUTTON_SIZE
+                && y >= btnY && y <= btnY + PAUSE_BUTTON_SIZE;
     }
 
     private void startGame() {
         player.reset(screenWidth / 2.0, screenHeight / 2.0);
         enemies.clear();
+        projectiles.clear();
         score = 0;
         scoreTimer = 0;
         spawnTimer = 0;
+        fireTimer = 0;
+        damageFlashTimer = 0;
         joystick.notPressed();
         gameState = GameState.PLAYING;
         soundManager.playStart();
@@ -164,6 +203,10 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
             case PLAYING:
                 drawPlaying(canvas);
                 break;
+            case PAUSED:
+                drawPlaying(canvas);
+                drawPauseOverlay(canvas);
+                break;
             case GAME_OVER:
                 drawGameOver(canvas);
                 break;
@@ -182,13 +225,41 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         for (Enemy enemy : enemies) {
             enemy.draw(canvas);
         }
+        for (Projectile projectile : projectiles) {
+            projectile.draw(canvas);
+        }
         joystick.draw(canvas);
+
+        // Damage flash overlay
+        if (damageFlashTimer > 0) {
+            canvas.drawColor(Color.argb(100, 255, 0, 0));
+        }
 
         // HUD
         drawHealthBar(canvas);
         drawScore(canvas);
+        drawPauseButton(canvas);
         drawUPS(canvas);
         drawFPS(canvas);
+    }
+
+    private void drawPauseButton(Canvas canvas) {
+        float btnX = screenWidth - PAUSE_BUTTON_SIZE - PAUSE_BUTTON_MARGIN;
+        float btnY = PAUSE_BUTTON_MARGIN;
+        float barWidth = PAUSE_BUTTON_SIZE * 0.2f;
+        float barHeight = PAUSE_BUTTON_SIZE * 0.6f;
+        float barY = btnY + PAUSE_BUTTON_SIZE * 0.2f;
+        float gap = PAUSE_BUTTON_SIZE * 0.15f;
+        float centerX = btnX + PAUSE_BUTTON_SIZE / 2f;
+
+        canvas.drawRect(centerX - gap - barWidth, barY, centerX - gap, barY + barHeight, pauseButtonPaint);
+        canvas.drawRect(centerX + gap, barY, centerX + gap + barWidth, barY + barHeight, pauseButtonPaint);
+    }
+
+    private void drawPauseOverlay(Canvas canvas) {
+        canvas.drawColor(Color.argb(150, 0, 0, 0));
+        canvas.drawText("Paused", screenWidth / 2f, screenHeight / 2f - 50, titlePaint);
+        canvas.drawText("Tap to Resume", screenWidth / 2f, screenHeight / 2f + 60, subtitlePaint);
     }
 
     private void drawGameOver(Canvas canvas) {
@@ -218,7 +289,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
     }
 
     private void drawScore(Canvas canvas) {
-        canvas.drawText("Score: " + score, screenWidth - 30, 50, scorePaint);
+        canvas.drawText("Score: " + score, screenWidth / 2f, 50, scorePaint);
     }
 
     private void drawUPS(Canvas canvas) {
@@ -236,23 +307,78 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
             return;
         }
 
+        // Decrement damage flash
+        if (damageFlashTimer > 0) {
+            damageFlashTimer--;
+        }
+
         joystick.update();
         player.update();
         player.clampToScreen(screenWidth, screenHeight);
 
+        // Auto-fire projectiles in joystick direction
+        double ax = joystick.actuatorX();
+        double ay = joystick.actuatorY();
+        if (ax != 0 || ay != 0) {
+            fireTimer++;
+            if (fireTimer >= FIRE_INTERVAL) {
+                double mag = Math.sqrt(ax * ax + ay * ay);
+                float bulletRadius = (float) (screenHeight * 0.01);
+                projectiles.add(new Projectile(
+                        player.positionX(), player.positionY(),
+                        bulletRadius, ax / mag, ay / mag
+                ));
+                fireTimer = 0;
+            }
+        } else {
+            fireTimer = 0;
+        }
+
+        // Update projectiles, remove off-screen
+        Iterator<Projectile> projIterator = projectiles.iterator();
+        while (projIterator.hasNext()) {
+            Projectile p = projIterator.next();
+            p.update();
+            if (p.isOffScreen(screenWidth, screenHeight)) {
+                projIterator.remove();
+            }
+        }
+
+        // Update enemies
         for (Enemy enemy : enemies) {
             enemy.update();
             enemy.clampToScreen(screenWidth, screenHeight);
         }
 
-        // Collision detection: remove enemy on hit, damage player
-        Iterator<Enemy> iterator = enemies.iterator();
-        while (iterator.hasNext()) {
-            Enemy enemy = iterator.next();
+        // Projectile-enemy collisions
+        Iterator<Enemy> enemyIterator = enemies.iterator();
+        while (enemyIterator.hasNext()) {
+            Enemy enemy = enemyIterator.next();
+            Iterator<Projectile> bulletIterator = projectiles.iterator();
+            boolean enemyHit = false;
+            while (bulletIterator.hasNext()) {
+                Projectile p = bulletIterator.next();
+                if (Circle.isColliding(p, enemy)) {
+                    bulletIterator.remove();
+                    enemyHit = true;
+                    break;
+                }
+            }
+            if (enemyHit) {
+                enemyIterator.remove();
+                score += KILL_SCORE_BONUS;
+            }
+        }
+
+        // Player-enemy collisions
+        enemyIterator = enemies.iterator();
+        while (enemyIterator.hasNext()) {
+            Enemy enemy = enemyIterator.next();
             if (Circle.isColliding(player, enemy)) {
                 player.takeDamage();
-                iterator.remove();
+                enemyIterator.remove();
                 soundManager.playHit();
+                damageFlashTimer = DAMAGE_FLASH_DURATION;
             }
         }
 
@@ -262,6 +388,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
             return;
         }
 
+        // Enemy spawning
         spawnTimer++;
         int spawnInterval = Math.max(MIN_SPAWN_INTERVAL, INITIAL_SPAWN_INTERVAL - score * 2);
         if (spawnTimer >= spawnInterval) {
@@ -269,6 +396,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
             spawnTimer = 0;
         }
 
+        // Survival score: +1 per second
         scoreTimer++;
         if (scoreTimer >= (int) GameLoop.MAX_UPS) {
             score++;
