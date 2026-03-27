@@ -1,6 +1,7 @@
 package com.example.my2dgame;
 
 import android.graphics.Canvas;
+import android.util.Log;
 import android.view.SurfaceHolder;
 
 public class GameLoop extends Thread {
@@ -96,7 +97,7 @@ public class GameLoop extends Thread {
             if (elapsedTime >= 1000) {
                 averageUPS = updateCount / (1E-3 * elapsedTime);
                 averageFPS = frameCount / (1E-3 * elapsedTime);
-                System.out.println(averageFPS  + " " + averageUPS);
+                Log.d("GameLoop", "FPS: " + averageFPS + " UPS: " + averageUPS);
                 updateCount = 0;
                 frameCount = 0;
                 startTime = System.currentTimeMillis();

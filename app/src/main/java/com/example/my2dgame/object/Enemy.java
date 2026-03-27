@@ -14,7 +14,7 @@ public class Enemy extends Circle {
     private final Player player;
 
     public Enemy(Context context, Player player, double positionX, double positionY, float radius) {
-        super(context, ContextCompat.getColor(context, R.color.enemy), positionX, positionY, radius);
+        super(ContextCompat.getColor(context, R.color.enemy), positionX, positionY, radius);
         this.player = player;
     }
 

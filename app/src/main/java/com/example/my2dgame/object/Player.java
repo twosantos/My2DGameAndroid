@@ -17,7 +17,7 @@ public class Player extends Circle {
     private int healthPoints = MAX_HEALTH;
 
     public Player(Context context, Joystick joystick, double positionX, double positionY, float radius) {
-        super(context, ContextCompat.getColor(context, R.color.player), positionX, positionY, radius);
+        super(ContextCompat.getColor(context, R.color.player), positionX, positionY, radius);
         this.joystick = joystick;
     }
 
