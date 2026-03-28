@@ -23,7 +23,9 @@ public class Joystick {
             int centerPositionX,
             int centerPositionY,
             int outerCircleRadius,
-            int innerCircleRadius
+            int innerCircleRadius,
+            int innerColor,
+            int outerColor
     ) {
         this.outerCircleRadius = outerCircleRadius;
         this.innerCircleRadius = innerCircleRadius;
@@ -33,11 +35,11 @@ public class Joystick {
         this.innerCircleCenterPositionY = centerPositionY;
 
         innerCirclePaint = new Paint();
-        innerCirclePaint.setColor(Color.BLUE);
+        innerCirclePaint.setColor(innerColor);
         innerCirclePaint.setStyle(Paint.Style.FILL_AND_STROKE);
 
         outerCirclePaint = new Paint();
-        outerCirclePaint.setColor(Color.GRAY);
+        outerCirclePaint.setColor(outerColor);
         outerCirclePaint.setStyle(Paint.Style.FILL_AND_STROKE);
     }
 

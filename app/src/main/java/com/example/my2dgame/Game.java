@@ -46,6 +46,9 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
     private final SharedPreferences prefs;
 
     private Joystick joystick;
+    private Joystick aimJoystick;
+    private int movePointerId = -1;
+    private int aimPointerId = -1;
     private Player player;
     private final List<Enemy> enemies = new ArrayList<>();
     private final List<Projectile> projectiles = new ArrayList<>();
@@ -114,37 +117,75 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         switch (gameState) {
             case MENU:
             case GAME_OVER:
-                if (event.getAction() == MotionEvent.ACTION_DOWN) {
+                if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
                     startGame();
                 }
                 return true;
-            case PLAYING:
-                switch (event.getAction()) {
-                    case MotionEvent.ACTION_DOWN:
-                        if (isTouchOnPauseButton(event.getX(), event.getY())) {
-                            gameState = GameState.PAUSED;
-                            joystick.notPressed();
-                            return true;
-                        }
-                        joystick.pressed((double) event.getX(), (double) event.getY());
-                        return true;
-                    case MotionEvent.ACTION_MOVE:
-                        if (joystick.isPressed()) {
-                            joystick.setActuator((double) event.getX(), (double) event.getY());
-                        }
-                        return true;
-                    case MotionEvent.ACTION_UP:
-                        joystick.notPressed();
-                        return true;
-                }
-                break;
             case PAUSED:
-                if (event.getAction() == MotionEvent.ACTION_DOWN) {
+                if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
                     gameState = GameState.PLAYING;
                 }
                 return true;
+            case PLAYING:
+                return handlePlayingTouch(event);
         }
         return super.onTouchEvent(event);
+    }
+
+    private boolean handlePlayingTouch(MotionEvent event) {
+        int actionIndex = event.getActionIndex();
+        int pointerId = event.getPointerId(actionIndex);
+        float x = event.getX(actionIndex);
+        float y = event.getY(actionIndex);
+
+        switch (event.getActionMasked()) {
+            case MotionEvent.ACTION_DOWN:
+            case MotionEvent.ACTION_POINTER_DOWN:
+                if (isTouchOnPauseButton(x, y)) {
+                    gameState = GameState.PAUSED;
+                    releaseAllJoysticks();
+                    return true;
+                }
+                // Left half → movement, right half → aim
+                if (x < screenWidth / 2.0) {
+                    movePointerId = pointerId;
+                    joystick.setActuator(x, y);
+                } else {
+                    aimPointerId = pointerId;
+                    aimJoystick.setActuator(x, y);
+                }
+                return true;
+
+            case MotionEvent.ACTION_MOVE:
+                for (int i = 0; i < event.getPointerCount(); i++) {
+                    int id = event.getPointerId(i);
+                    if (id == movePointerId) {
+                        joystick.setActuator(event.getX(i), event.getY(i));
+                    } else if (id == aimPointerId) {
+                        aimJoystick.setActuator(event.getX(i), event.getY(i));
+                    }
+                }
+                return true;
+
+            case MotionEvent.ACTION_UP:
+            case MotionEvent.ACTION_POINTER_UP:
+                if (pointerId == movePointerId) {
+                    joystick.notPressed();
+                    movePointerId = -1;
+                } else if (pointerId == aimPointerId) {
+                    aimJoystick.notPressed();
+                    aimPointerId = -1;
+                }
+                return true;
+        }
+        return true;
+    }
+
+    private void releaseAllJoysticks() {
+        joystick.notPressed();
+        aimJoystick.notPressed();
+        movePointerId = -1;
+        aimPointerId = -1;
     }
 
     private boolean isTouchOnPauseButton(float x, float y) {
@@ -163,7 +204,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         spawnTimer = 0;
         fireTimer = 0;
         damageFlashTimer = 0;
-        joystick.notPressed();
+        releaseAllJoysticks();
         gameState = GameState.PLAYING;
         soundManager.playStart();
     }
@@ -177,7 +218,17 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
                 (int) (screenWidth * 0.12),
                 (int) (screenHeight * 0.75),
                 (int) (screenHeight * 0.08),
-                (int) (screenHeight * 0.045)
+                (int) (screenHeight * 0.045),
+                Color.BLUE,
+                Color.GRAY
+        );
+        aimJoystick = new Joystick(
+                (int) (screenWidth * 0.88),
+                (int) (screenHeight * 0.75),
+                (int) (screenHeight * 0.08),
+                (int) (screenHeight * 0.045),
+                Color.RED,
+                Color.DKGRAY
         );
         player = new Player(
                 getContext(),
@@ -239,6 +290,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
             projectile.draw(canvas);
         }
         joystick.draw(canvas);
+        aimJoystick.draw(canvas);
 
         // Damage flash overlay
         if (damageFlashTimer > 0) {
@@ -328,12 +380,13 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         }
 
         joystick.update();
+        aimJoystick.update();
         player.update();
         player.clampToScreen(screenWidth, screenHeight);
 
-        // Auto-fire projectiles in joystick direction
-        double ax = joystick.actuatorX();
-        double ay = joystick.actuatorY();
+        // Fire projectiles in aim joystick direction
+        double ax = aimJoystick.actuatorX();
+        double ay = aimJoystick.actuatorY();
         if (ax != 0 || ay != 0) {
             fireTimer++;
             if (fireTimer >= FIRE_INTERVAL) {
