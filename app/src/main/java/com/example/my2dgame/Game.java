@@ -31,6 +31,9 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
     private static final int KILL_SCORE_BONUS = 3;
     private static final int PAUSE_BUTTON_SIZE = 80;
     private static final int PAUSE_BUTTON_MARGIN = 20;
+    private static final int PARTICLE_COUNT = 8;
+    private static final int SHAKE_DURATION = 4;
+    private static final float SHAKE_INTENSITY = 10f;
 
     private final GameLoop gameLoop;
     private final Paint statsPaint;
@@ -54,6 +57,8 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
     private final List<Projectile> projectiles = new ArrayList<>();
     private final List<Enemy> enemyPool = new ArrayList<>();
     private final List<Projectile> projectilePool = new ArrayList<>();
+    private final List<Particle> particles = new ArrayList<>();
+    private final List<Particle> particlePool = new ArrayList<>();
     private int screenWidth;
     private int screenHeight;
 
@@ -67,6 +72,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
     private boolean isNewHighScore = false;
     private long gameOverTimestamp = 0;
     private static final long GAME_OVER_COOLDOWN_MS = 1000;
+    private int shakeTimer = 0;
 
     public Game(Context context) {
         super(context);
@@ -205,13 +211,16 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         // Pool active objects before clearing
         enemyPool.addAll(enemies);
         projectilePool.addAll(projectiles);
+        particlePool.addAll(particles);
         enemies.clear();
         projectiles.clear();
+        particles.clear();
         score = 0;
         scoreTimer = 0;
         spawnTimer = 0;
         fireTimer = 0;
         damageFlashTimer = 0;
+        shakeTimer = 0;
         releaseAllJoysticks();
         gameState = GameState.PLAYING;
         soundManager.playStart();
@@ -289,6 +298,16 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
     }
 
     private void drawPlaying(Canvas canvas) {
+        // Screen shake offset
+        boolean shaking = shakeTimer > 0;
+        if (shaking) {
+            float intensity = shakeTimer * (SHAKE_INTENSITY / SHAKE_DURATION);
+            float offsetX = (random.nextFloat() * 2 - 1) * intensity;
+            float offsetY = (random.nextFloat() * 2 - 1) * intensity;
+            canvas.save();
+            canvas.translate(offsetX, offsetY);
+        }
+
         // Game objects
         player.draw(canvas);
         for (Enemy enemy : enemies) {
@@ -297,15 +316,22 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         for (Projectile projectile : projectiles) {
             projectile.draw(canvas);
         }
+        for (Particle particle : particles) {
+            particle.draw(canvas);
+        }
         joystick.draw(canvas);
         aimJoystick.draw(canvas);
 
-        // Damage flash overlay
+        if (shaking) {
+            canvas.restore();
+        }
+
+        // Damage flash overlay (drawn after restore so it doesn't shake)
         if (damageFlashTimer > 0) {
             canvas.drawColor(Color.argb(100, 255, 0, 0));
         }
 
-        // HUD
+        // HUD (stable, no shake)
         drawHealthBar(canvas);
         drawScore(canvas);
         drawPauseButton(canvas);
@@ -382,10 +408,9 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
             return;
         }
 
-        // Decrement damage flash
-        if (damageFlashTimer > 0) {
-            damageFlashTimer--;
-        }
+        // Decrement timers
+        if (damageFlashTimer > 0) damageFlashTimer--;
+        if (shakeTimer > 0) shakeTimer--;
 
         joystick.update();
         aimJoystick.update();
@@ -443,6 +468,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
                 }
             }
             if (enemyHit) {
+                spawnParticles(enemy.positionX(), enemy.positionY(), enemy.getType().getColor());
                 enemyPool.add(enemy);
                 enemyIterator.remove();
                 score += KILL_SCORE_BONUS;
@@ -455,10 +481,23 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
             Enemy enemy = enemyIterator.next();
             if (Circle.isColliding(player, enemy)) {
                 player.takeDamage();
+                spawnParticles(enemy.positionX(), enemy.positionY(), enemy.getType().getColor());
                 enemyPool.add(enemy);
                 enemyIterator.remove();
                 soundManager.playHit();
                 damageFlashTimer = DAMAGE_FLASH_DURATION;
+                shakeTimer = SHAKE_DURATION;
+            }
+        }
+
+        // Update particles
+        Iterator<Particle> partIterator = particles.iterator();
+        while (partIterator.hasNext()) {
+            Particle p = partIterator.next();
+            p.update(dt);
+            if (p.isDead()) {
+                particlePool.add(p);
+                partIterator.remove();
             }
         }
 
@@ -541,5 +580,20 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
             return e;
         }
         return new Enemy(color, player, x, y, radius, type);
+    }
+
+    private void spawnParticles(double x, double y, int color) {
+        for (int i = 0; i < PARTICLE_COUNT; i++) {
+            double angle = random.nextDouble() * 2 * Math.PI;
+            float pRadius = 3 + random.nextFloat() * 4;
+            Particle p;
+            if (!particlePool.isEmpty()) {
+                p = particlePool.remove(particlePool.size() - 1);
+            } else {
+                p = new Particle();
+            }
+            p.init(x, y, pRadius, color, Math.cos(angle), Math.sin(angle));
+            particles.add(p);
+        }
     }
 }
