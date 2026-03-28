@@ -31,11 +31,14 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
     private static final int RAPID_FIRE_INTERVAL = 4; // fast-fire every 0.13s
     private static final int DAMAGE_FLASH_DURATION = 6; // frames (~0.2s at 30 UPS)
     private static final int KILL_SCORE_BONUS = 3;
+    private static final int BOSS_SCORE_BONUS = 100;
     private static final int PAUSE_BUTTON_SIZE = 80;
     private static final int PAUSE_BUTTON_MARGIN = 20;
     private static final int PARTICLE_COUNT = 8;
     private static final int SHAKE_DURATION = 4;
+    private static final int BOSS_SHAKE_DURATION = 8;
     private static final float SHAKE_INTENSITY = 10f;
+    private static final float BOSS_SHAKE_INTENSITY = 20f;
     private static final int PICKUP_SPAWN_INTERVAL = 450; // every 15 seconds
     
     // Wave system constants
@@ -82,12 +85,15 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
     private long gameOverTimestamp = 0;
     private static final long GAME_OVER_COOLDOWN_MS = 1000;
     private int shakeTimer = 0;
+    private float currentShakeIntensity = SHAKE_INTENSITY;
+    private int currentShakeDuration = SHAKE_DURATION;
 
     // Wave system state
     private int waveNumber = 0;
     private int enemiesToSpawn = 0;
     private int waveBreakTimer = 0;
     private int waveAnnouncementTimer = 0;
+    private boolean isBossWave = false;
 
     public Game(Context context) {
         super(context);
@@ -254,6 +260,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         enemiesToSpawn = 0;
         waveBreakTimer = 30; // Short delay before first wave
         waveAnnouncementTimer = 0;
+        isBossWave = false;
         
         releaseAllJoysticks();
         gameState = GameState.PLAYING;
@@ -348,7 +355,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         // Screen shake offset
         boolean shaking = shakeTimer > 0;
         if (shaking) {
-            float intensity = shakeTimer * (SHAKE_INTENSITY / SHAKE_DURATION);
+            float intensity = shakeTimer * (currentShakeIntensity / currentShakeDuration);
             float offsetX = (random.nextFloat() * 2 - 1) * intensity;
             float offsetY = (random.nextFloat() * 2 - 1) * intensity;
             canvas.save();
@@ -388,7 +395,8 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         // Wave Announcement
         if (waveAnnouncementTimer > 0) {
             titlePaint.setAlpha(Math.min(255, waveAnnouncementTimer * 10));
-            canvas.drawText("Wave " + waveNumber, screenWidth / 2f, screenHeight / 2f, titlePaint);
+            String text = isBossWave ? "BOSS WAVE!" : "Wave " + waveNumber;
+            canvas.drawText(text, screenWidth / 2f, screenHeight / 2f, titlePaint);
             titlePaint.setAlpha(255);
         }
         
@@ -559,10 +567,12 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
                 }
             }
             if (enemyHit) {
-                spawnParticles(enemy.positionX(), enemy.positionY(), enemy.getType().getColor());
-                enemyPool.add(enemy);
-                enemyIterator.remove();
-                score += KILL_SCORE_BONUS;
+                if (enemy.takeDamage()) {
+                    spawnParticles(enemy.positionX(), enemy.positionY(), enemy.getType().getColor());
+                    enemyPool.add(enemy);
+                    enemyIterator.remove();
+                    score += enemy.isBoss() ? BOSS_SCORE_BONUS : KILL_SCORE_BONUS;
+                }
             }
         }
 
@@ -574,11 +584,24 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
                 if (Circle.isColliding(player, enemy)) {
                     player.takeDamage();
                     spawnParticles(enemy.positionX(), enemy.positionY(), enemy.getType().getColor());
-                    enemyPool.add(enemy);
-                    enemyIterator.remove();
+                    
+                    if (!enemy.isBoss()) {
+                        enemyPool.add(enemy);
+                        enemyIterator.remove();
+                    }
+                    
                     soundManager.playHit();
                     damageFlashTimer = DAMAGE_FLASH_DURATION;
-                    shakeTimer = SHAKE_DURATION;
+                    
+                    if (enemy.isBoss()) {
+                        shakeTimer = BOSS_SHAKE_DURATION;
+                        currentShakeDuration = BOSS_SHAKE_DURATION;
+                        currentShakeIntensity = BOSS_SHAKE_INTENSITY;
+                    } else {
+                        shakeTimer = SHAKE_DURATION;
+                        currentShakeDuration = SHAKE_DURATION;
+                        currentShakeIntensity = SHAKE_INTENSITY;
+                    }
                 }
             }
         }
@@ -618,7 +641,11 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
             spawnTimer++;
             int spawnInterval = Math.max(MIN_SPAWN_INTERVAL, INITIAL_SPAWN_INTERVAL - (waveNumber * 5));
             if (spawnTimer >= spawnInterval) {
-                spawnEnemy();
+                if (isBossWave) {
+                    spawnBoss();
+                } else {
+                    spawnEnemy();
+                }
                 enemiesToSpawn--;
                 spawnTimer = 0;
             }
@@ -637,7 +664,14 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
 
     private void startNextWave() {
         waveNumber++;
-        enemiesToSpawn = 5 + (waveNumber * 2);
+        isBossWave = (waveNumber % 5 == 0);
+        
+        if (isBossWave) {
+            enemiesToSpawn = 1;
+        } else {
+            enemiesToSpawn = 5 + (waveNumber * 2);
+        }
+        
         waveAnnouncementTimer = WAVE_ANNOUNCEMENT_DURATION;
         spawnTimer = 0;
     }
@@ -675,6 +709,18 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
                 break;
         }
         enemies.add(obtainEnemy(type.getColor(), x, y, enemyRadius, type));
+    }
+
+    private void spawnBoss() {
+        EnemyType type = EnemyType.TANK; // Use tank stats as base
+        float baseRadius = (float) (screenHeight * 0.03);
+        float bossRadius = (float) (baseRadius * 2.5);
+        double x = screenWidth / 2.0;
+        double y = bossRadius;
+        
+        Enemy boss = obtainEnemy(Color.RED, x, y, bossRadius, type);
+        boss.setAsBoss(10 + (waveNumber / 5) * 5); // Scaling boss health
+        enemies.add(boss);
     }
 
     private void spawnPickup() {
