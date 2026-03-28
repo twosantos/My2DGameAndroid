@@ -17,6 +17,7 @@ public class SoundManager {
 
     private MediaPlayer musicPlayer;
     private final Context context;
+    private boolean isPaused = false;
 
     public SoundManager(Context context) {
         this.context = context;
@@ -56,6 +57,21 @@ public class SoundManager {
         musicPlayer.setLooping(true);
         musicPlayer.setVolume(0.5f, 0.5f);
         musicPlayer.start();
+        isPaused = false;
+    }
+
+    public void pauseMusic() {
+        if (musicPlayer != null && musicPlayer.isPlaying()) {
+            musicPlayer.pause();
+            isPaused = true;
+        }
+    }
+
+    public void resumeMusic() {
+        if (musicPlayer != null && isPaused) {
+            musicPlayer.start();
+            isPaused = false;
+        }
     }
 
     public void stopMusic() {

@@ -39,7 +39,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
     private static final int WAVE_BREAK_DURATION = 90; // 3 seconds
     private static final int WAVE_ANNOUNCEMENT_DURATION = 60; // 2 seconds
 
-    private final GameLoop gameLoop;
+    private GameLoop gameLoop;
     private final Paint statsPaint;
     private final Paint titlePaint;
     private final Paint subtitlePaint;
@@ -90,8 +90,6 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         SurfaceHolder surfaceHolder = getHolder();
         surfaceHolder.addCallback(this);
 
-        gameLoop = new GameLoop(this, surfaceHolder);
-
         statsPaint = new Paint();
         statsPaint.setColor(ContextCompat.getColor(context, R.color.magenta));
         statsPaint.setTextSize(50);
@@ -130,6 +128,18 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         highScore = prefs.getInt("high_score", 0);
 
         setFocusable(true);
+    }
+
+    public void pause() {
+        if (gameState == GameState.PLAYING) {
+            gameState = GameState.PAUSED;
+            releaseAllJoysticks();
+        }
+        soundManager.pauseMusic();
+    }
+
+    public void resume() {
+        soundManager.resumeMusic();
     }
 
     @Override
@@ -203,8 +213,8 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
     }
 
     private void releaseAllJoysticks() {
-        joystick.notPressed();
-        aimJoystick.notPressed();
+        if (joystick != null) joystick.notPressed();
+        if (aimJoystick != null) aimJoystick.notPressed();
         movePointerId = -1;
         aimPointerId = -1;
     }
@@ -248,31 +258,40 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         screenWidth = getWidth();
         screenHeight = getHeight();
 
-        joystick = new Joystick(
-                (int) (screenWidth * 0.12),
-                (int) (screenHeight * 0.75),
-                (int) (screenHeight * 0.08),
-                (int) (screenHeight * 0.045),
-                Color.BLUE,
-                Color.GRAY
-        );
-        aimJoystick = new Joystick(
-                (int) (screenWidth * 0.88),
-                (int) (screenHeight * 0.75),
-                (int) (screenHeight * 0.08),
-                (int) (screenHeight * 0.045),
-                Color.RED,
-                Color.DKGRAY
-        );
-        player = new Player(
-                getContext(),
-                joystick,
-                screenWidth / 2.0,
-                screenHeight / 2.0,
-                (float) (screenHeight * 0.035)
-        );
+        if (joystick == null) {
+            joystick = new Joystick(
+                    (int) (screenWidth * 0.12),
+                    (int) (screenHeight * 0.75),
+                    (int) (screenHeight * 0.08),
+                    (int) (screenHeight * 0.045),
+                    Color.BLUE,
+                    Color.GRAY
+            );
+        }
+        if (aimJoystick == null) {
+            aimJoystick = new Joystick(
+                    (int) (screenWidth * 0.88),
+                    (int) (screenHeight * 0.75),
+                    (int) (screenHeight * 0.08),
+                    (int) (screenHeight * 0.045),
+                    Color.RED,
+                    Color.DKGRAY
+            );
+        }
+        if (player == null) {
+            player = new Player(
+                    getContext(),
+                    joystick,
+                    screenWidth / 2.0,
+                    screenHeight / 2.0,
+                    (float) (screenHeight * 0.035)
+            );
+        }
 
-        gameLoop.startLoop();
+        if (gameLoop == null || !gameLoop.isAlive()) {
+            gameLoop = new GameLoop(this, surfaceHolder);
+            gameLoop.startLoop();
+        }
     }
 
     @Override
@@ -281,13 +300,17 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
 
     @Override
     public void surfaceDestroyed(@NonNull SurfaceHolder surfaceHolder) {
-        gameLoop.stopLoop();
-        soundManager.release();
+        if (gameLoop != null) {
+            gameLoop.stopLoop();
+            gameLoop = null;
+        }
     }
 
     @Override
     public void draw(Canvas canvas) {
         super.draw(canvas);
+        if (canvas == null) return;
+        
         switch (gameState) {
             case MENU:
                 drawMenu(canvas);
@@ -326,7 +349,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         }
 
         // Game objects
-        player.draw(canvas);
+        if (player != null) player.draw(canvas);
         for (Enemy enemy : enemies) {
             enemy.draw(canvas);
         }
@@ -336,8 +359,8 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         for (Particle particle : particles) {
             particle.draw(canvas);
         }
-        joystick.draw(canvas);
-        aimJoystick.draw(canvas);
+        if (joystick != null) joystick.draw(canvas);
+        if (aimJoystick != null) aimJoystick.draw(canvas);
 
         if (shaking) {
             canvas.restore();
@@ -396,6 +419,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
     }
 
     private void drawHealthBar(Canvas canvas) {
+        if (player == null) return;
         float barX = 30;
         float barY = 20;
         float barWidth = 300;
@@ -422,11 +446,13 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
     }
 
     private void drawUPS(Canvas canvas) {
+        if (gameLoop == null) return;
         String averageUPS = Double.toString(gameLoop.getAverageUPS());
         canvas.drawText("UPS " + averageUPS, 30, 80, statsPaint);
     }
 
     private void drawFPS(Canvas canvas) {
+        if (gameLoop == null) return;
         String averageFPS = Double.toString(gameLoop.getAverageFPS());
         canvas.drawText("FPS " + averageFPS, 30, 130, statsPaint);
     }
@@ -449,27 +475,31 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         }
         if (waveAnnouncementTimer > 0) waveAnnouncementTimer--;
 
-        joystick.update();
-        aimJoystick.update();
-        player.update(dt);
-        player.clampToScreen(screenWidth, screenHeight);
+        if (joystick != null) joystick.update();
+        if (aimJoystick != null) aimJoystick.update();
+        if (player != null) {
+            player.update(dt);
+            player.clampToScreen(screenWidth, screenHeight);
+        }
 
         // Fire projectiles in aim joystick direction
-        double ax = aimJoystick.actuatorX();
-        double ay = aimJoystick.actuatorY();
-        if (ax != 0 || ay != 0) {
-            fireTimer++;
-            if (fireTimer >= FIRE_INTERVAL) {
-                double mag = Math.sqrt(ax * ax + ay * ay);
-                float bulletRadius = (float) (screenHeight * 0.01);
-                projectiles.add(obtainProjectile(
-                        player.positionX(), player.positionY(),
-                        bulletRadius, ax / mag, ay / mag
-                ));
+        if (aimJoystick != null && player != null) {
+            double ax = aimJoystick.actuatorX();
+            double ay = aimJoystick.actuatorY();
+            if (ax != 0 || ay != 0) {
+                fireTimer++;
+                if (fireTimer >= FIRE_INTERVAL) {
+                    double mag = Math.sqrt(ax * ax + ay * ay);
+                    float bulletRadius = (float) (screenHeight * 0.01);
+                    projectiles.add(obtainProjectile(
+                            player.positionX(), player.positionY(),
+                            bulletRadius, ax / mag, ay / mag
+                    ));
+                    fireTimer = 0;
+                }
+            } else {
                 fireTimer = 0;
             }
-        } else {
-            fireTimer = 0;
         }
 
         // Update projectiles, remove off-screen
@@ -513,17 +543,19 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         }
 
         // Player-enemy collisions
-        enemyIterator = enemies.iterator();
-        while (enemyIterator.hasNext()) {
-            Enemy enemy = enemyIterator.next();
-            if (Circle.isColliding(player, enemy)) {
-                player.takeDamage();
-                spawnParticles(enemy.positionX(), enemy.positionY(), enemy.getType().getColor());
-                enemyPool.add(enemy);
-                enemyIterator.remove();
-                soundManager.playHit();
-                damageFlashTimer = DAMAGE_FLASH_DURATION;
-                shakeTimer = SHAKE_DURATION;
+        if (player != null) {
+            enemyIterator = enemies.iterator();
+            while (enemyIterator.hasNext()) {
+                Enemy enemy = enemyIterator.next();
+                if (Circle.isColliding(player, enemy)) {
+                    player.takeDamage();
+                    spawnParticles(enemy.positionX(), enemy.positionY(), enemy.getType().getColor());
+                    enemyPool.add(enemy);
+                    enemyIterator.remove();
+                    soundManager.playHit();
+                    damageFlashTimer = DAMAGE_FLASH_DURATION;
+                    shakeTimer = SHAKE_DURATION;
+                }
             }
         }
 
@@ -538,7 +570,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
             }
         }
 
-        if (!player.isAlive()) {
+        if (player != null && !player.isAlive()) {
             gameState = GameState.GAME_OVER;
             gameOverTimestamp = System.currentTimeMillis();
             isNewHighScore = score > highScore;
