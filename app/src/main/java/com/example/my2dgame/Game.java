@@ -14,6 +14,7 @@ import androidx.core.content.ContextCompat;
 
 import com.example.my2dgame.object.Circle;
 import com.example.my2dgame.object.Enemy;
+import com.example.my2dgame.object.Pickup;
 import com.example.my2dgame.object.Player;
 import com.example.my2dgame.object.Projectile;
 
@@ -27,6 +28,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
     private static final int INITIAL_SPAWN_INTERVAL = 90; // 3 seconds at 30 UPS
     private static final int MIN_SPAWN_INTERVAL = 20;
     private static final int FIRE_INTERVAL = 10; // auto-fire every 0.33s at 30 UPS
+    private static final int RAPID_FIRE_INTERVAL = 4; // fast-fire every 0.13s
     private static final int DAMAGE_FLASH_DURATION = 6; // frames (~0.2s at 30 UPS)
     private static final int KILL_SCORE_BONUS = 3;
     private static final int PAUSE_BUTTON_SIZE = 80;
@@ -34,6 +36,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
     private static final int PARTICLE_COUNT = 8;
     private static final int SHAKE_DURATION = 4;
     private static final float SHAKE_INTENSITY = 10f;
+    private static final int PICKUP_SPAWN_INTERVAL = 450; // every 15 seconds
     
     // Wave system constants
     private static final int WAVE_BREAK_DURATION = 90; // 3 seconds
@@ -63,6 +66,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
     private final List<Projectile> projectilePool = new ArrayList<>();
     private final List<Particle> particles = new ArrayList<>();
     private final List<Particle> particlePool = new ArrayList<>();
+    private final List<Pickup> pickups = new ArrayList<>();
     private int screenWidth;
     private int screenHeight;
 
@@ -72,6 +76,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
     private int spawnTimer = 0;
     private int fireTimer = 0;
     private int damageFlashTimer = 0;
+    private int pickupTimer = 0;
     private int highScore;
     private boolean isNewHighScore = false;
     private long gameOverTimestamp = 0;
@@ -235,11 +240,13 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         enemies.clear();
         projectiles.clear();
         particles.clear();
+        pickups.clear();
         score = 0;
         scoreTimer = 0;
         spawnTimer = 0;
         fireTimer = 0;
         damageFlashTimer = 0;
+        pickupTimer = 0;
         shakeTimer = 0;
         
         // Reset wave system
@@ -358,6 +365,9 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         }
         for (Particle particle : particles) {
             particle.draw(canvas);
+        }
+        for (Pickup pickup : pickups) {
+            pickup.draw(canvas);
         }
         if (joystick != null) joystick.draw(canvas);
         if (aimJoystick != null) aimJoystick.draw(canvas);
@@ -488,7 +498,8 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
             double ay = aimJoystick.actuatorY();
             if (ax != 0 || ay != 0) {
                 fireTimer++;
-                if (fireTimer >= FIRE_INTERVAL) {
+                int interval = player.hasRapidFire() ? RAPID_FIRE_INTERVAL : FIRE_INTERVAL;
+                if (fireTimer >= interval) {
                     double mag = Math.sqrt(ax * ax + ay * ay);
                     float bulletRadius = (float) (screenHeight * 0.01);
                     projectiles.add(obtainProjectile(
@@ -517,6 +528,19 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         for (Enemy enemy : enemies) {
             enemy.update(dt);
             enemy.clampToScreen(screenWidth, screenHeight);
+        }
+
+        // Update Pickups
+        Iterator<Pickup> pickupIterator = pickups.iterator();
+        while (pickupIterator.hasNext()) {
+            Pickup p = pickupIterator.next();
+            p.update(dt);
+            if (Circle.isColliding(player, p)) {
+                player.applyPickup(p.getType());
+                pickupIterator.remove();
+            } else if (p.isExpired()) {
+                pickupIterator.remove();
+            }
         }
 
         // Projectile-enemy collisions
@@ -582,6 +606,13 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
             return;
         }
 
+        // Pickup spawning
+        pickupTimer++;
+        if (pickupTimer >= PICKUP_SPAWN_INTERVAL) {
+            spawnPickup();
+            pickupTimer = 0;
+        }
+
         // Structured Enemy spawning
         if (enemiesToSpawn > 0) {
             spawnTimer++;
@@ -644,6 +675,15 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
                 break;
         }
         enemies.add(obtainEnemy(type.getColor(), x, y, enemyRadius, type));
+    }
+
+    private void spawnPickup() {
+        PickupType[] types = PickupType.values();
+        PickupType type = types[random.nextInt(types.length)];
+        float radius = 25;
+        double x = radius + random.nextDouble() * (screenWidth - 2 * radius);
+        double y = radius + random.nextDouble() * (screenHeight - 2 * radius);
+        pickups.add(new Pickup(type, x, y, radius));
     }
 
     private Projectile obtainProjectile(double x, double y, float radius, double dirX, double dirY) {
