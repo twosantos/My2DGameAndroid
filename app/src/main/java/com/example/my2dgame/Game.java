@@ -52,6 +52,8 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
     private Player player;
     private final List<Enemy> enemies = new ArrayList<>();
     private final List<Projectile> projectiles = new ArrayList<>();
+    private final List<Enemy> enemyPool = new ArrayList<>();
+    private final List<Projectile> projectilePool = new ArrayList<>();
     private int screenWidth;
     private int screenHeight;
 
@@ -63,6 +65,8 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
     private int damageFlashTimer = 0;
     private int highScore;
     private boolean isNewHighScore = false;
+    private long gameOverTimestamp = 0;
+    private static final long GAME_OVER_COOLDOWN_MS = 1000;
 
     public Game(Context context) {
         super(context);
@@ -117,7 +121,8 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         switch (gameState) {
             case MENU:
             case GAME_OVER:
-                if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+                if (event.getActionMasked() == MotionEvent.ACTION_DOWN
+                        && System.currentTimeMillis() - gameOverTimestamp >= GAME_OVER_COOLDOWN_MS) {
                     startGame();
                 }
                 return true;
@@ -197,6 +202,9 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
 
     private void startGame() {
         player.reset(screenWidth / 2.0, screenHeight / 2.0);
+        // Pool active objects before clearing
+        enemyPool.addAll(enemies);
+        projectilePool.addAll(projectiles);
         enemies.clear();
         projectiles.clear();
         score = 0;
@@ -369,7 +377,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         canvas.drawText("FPS " + averageFPS, 30, 130, statsPaint);
     }
 
-    public void update() {
+    public void update(double dt) {
         if (gameState != GameState.PLAYING) {
             return;
         }
@@ -381,7 +389,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
 
         joystick.update();
         aimJoystick.update();
-        player.update();
+        player.update(dt);
         player.clampToScreen(screenWidth, screenHeight);
 
         // Fire projectiles in aim joystick direction
@@ -392,7 +400,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
             if (fireTimer >= FIRE_INTERVAL) {
                 double mag = Math.sqrt(ax * ax + ay * ay);
                 float bulletRadius = (float) (screenHeight * 0.01);
-                projectiles.add(new Projectile(
+                projectiles.add(obtainProjectile(
                         player.positionX(), player.positionY(),
                         bulletRadius, ax / mag, ay / mag
                 ));
@@ -406,15 +414,16 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         Iterator<Projectile> projIterator = projectiles.iterator();
         while (projIterator.hasNext()) {
             Projectile p = projIterator.next();
-            p.update();
+            p.update(dt);
             if (p.isOffScreen(screenWidth, screenHeight)) {
+                projectilePool.add(p);
                 projIterator.remove();
             }
         }
 
         // Update enemies
         for (Enemy enemy : enemies) {
-            enemy.update();
+            enemy.update(dt);
             enemy.clampToScreen(screenWidth, screenHeight);
         }
 
@@ -427,12 +436,14 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
             while (bulletIterator.hasNext()) {
                 Projectile p = bulletIterator.next();
                 if (Circle.isColliding(p, enemy)) {
+                    projectilePool.add(p);
                     bulletIterator.remove();
                     enemyHit = true;
                     break;
                 }
             }
             if (enemyHit) {
+                enemyPool.add(enemy);
                 enemyIterator.remove();
                 score += KILL_SCORE_BONUS;
             }
@@ -444,6 +455,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
             Enemy enemy = enemyIterator.next();
             if (Circle.isColliding(player, enemy)) {
                 player.takeDamage();
+                enemyPool.add(enemy);
                 enemyIterator.remove();
                 soundManager.playHit();
                 damageFlashTimer = DAMAGE_FLASH_DURATION;
@@ -452,6 +464,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
 
         if (!player.isAlive()) {
             gameState = GameState.GAME_OVER;
+            gameOverTimestamp = System.currentTimeMillis();
             isNewHighScore = score > highScore;
             if (isNewHighScore) {
                 highScore = score;
@@ -509,6 +522,24 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
                 y = random.nextDouble() * screenHeight;
                 break;
         }
-        enemies.add(new Enemy(type.getColor(), player, x, y, enemyRadius, type));
+        enemies.add(obtainEnemy(type.getColor(), x, y, enemyRadius, type));
+    }
+
+    private Projectile obtainProjectile(double x, double y, float radius, double dirX, double dirY) {
+        if (!projectilePool.isEmpty()) {
+            Projectile p = projectilePool.remove(projectilePool.size() - 1);
+            p.reset(x, y, radius, dirX, dirY);
+            return p;
+        }
+        return new Projectile(x, y, radius, dirX, dirY);
+    }
+
+    private Enemy obtainEnemy(int color, double x, double y, float radius, EnemyType type) {
+        if (!enemyPool.isEmpty()) {
+            Enemy e = enemyPool.remove(enemyPool.size() - 1);
+            e.reset(color, x, y, radius, type);
+            return e;
+        }
+        return new Enemy(color, player, x, y, radius, type);
     }
 }

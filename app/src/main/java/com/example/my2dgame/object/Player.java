@@ -45,10 +45,10 @@ public class Player extends Circle {
         healthPoints = MAX_HEALTH;
     }
 
-    public void update() {
-        velocityX = joystick.actuatorX() * MAX_SPEED;
-        velocityY = joystick.actuatorY() * MAX_SPEED;
-        positionX += velocityX;
-        positionY += velocityY;
+    public void update(double dt) {
+        velocityX = joystick.actuatorX() * SPEED_PPS;
+        velocityY = joystick.actuatorY() * SPEED_PPS;
+        positionX += velocityX * dt;
+        positionY += velocityY * dt;
     }
 }

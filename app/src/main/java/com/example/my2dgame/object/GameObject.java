@@ -30,5 +30,5 @@ public abstract class GameObject {
 
     public abstract void draw(Canvas canvas);
 
-    public abstract void update();
+    public abstract void update(double dt);
 }

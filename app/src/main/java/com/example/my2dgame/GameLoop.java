@@ -56,13 +56,14 @@ public class GameLoop extends Thread {
         Canvas canvas = null;
         while (isRunning) {
             long currentTime = System.currentTimeMillis();
-            long dt = currentTime - previousTime;
+            long time = currentTime - previousTime;
             previousTime = currentTime;
-            accumulatedTime += dt;
+            accumulatedTime += time;
 
             // Fixed-step game logic updates
+            double dt = UPS_PERIOD / 1000.0;
             while (accumulatedTime >= UPS_PERIOD) {
-                game.update();
+                game.update(dt);
                 updateCount++;
                 accumulatedTime -= UPS_PERIOD;
             }
