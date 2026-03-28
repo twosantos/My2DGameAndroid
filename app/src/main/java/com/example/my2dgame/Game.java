@@ -170,10 +170,10 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
                 // Left half → movement, right half → aim
                 if (x < screenWidth / 2.0) {
                     movePointerId = pointerId;
-                    joystick.setActuator(x, y);
+                    joystick.setCenter((int) x, (int) y);
                 } else {
                     aimPointerId = pointerId;
-                    aimJoystick.setActuator(x, y);
+                    aimJoystick.setCenter((int) x, (int) y);
                 }
                 return true;
 

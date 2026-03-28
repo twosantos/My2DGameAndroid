@@ -1,7 +1,6 @@
 package com.example.my2dgame;
 
 import android.graphics.Canvas;
-import android.graphics.Color;
 import android.graphics.Paint;
 
 public class Joystick {
@@ -14,8 +13,8 @@ public class Joystick {
     private int outerCircleCenterPositionY;
     private int innerCircleCenterPositionX;
     private int innerCircleCenterPositionY;
-    private boolean pressed;
-    private double joystickCenterToTouchDistance;
+    private boolean pressed = false;
+    private boolean hasBeenInitialised = false;
     private double actuatorX;
     private double actuatorY;
 
@@ -27,12 +26,12 @@ public class Joystick {
             int innerColor,
             int outerColor
     ) {
-        this.outerCircleRadius = outerCircleRadius;
-        this.innerCircleRadius = innerCircleRadius;
         this.outerCircleCenterPositionX = centerPositionX;
         this.outerCircleCenterPositionY = centerPositionY;
         this.innerCircleCenterPositionX = centerPositionX;
         this.innerCircleCenterPositionY = centerPositionY;
+        this.outerCircleRadius = outerCircleRadius;
+        this.innerCircleRadius = innerCircleRadius;
 
         innerCirclePaint = new Paint();
         innerCirclePaint.setColor(innerColor);
@@ -44,6 +43,19 @@ public class Joystick {
     }
 
     public void draw(Canvas canvas) {
+        // If not pressed and already initialised (used once), don't draw
+        if (!pressed && hasBeenInitialised) return;
+
+        // Save original alpha
+        int oldOuterAlpha = outerCirclePaint.getAlpha();
+        int oldInnerAlpha = innerCirclePaint.getAlpha();
+
+        // If it's just a placeholder (not pressed and not initialised yet), draw faded
+        if (!pressed && !hasBeenInitialised) {
+            outerCirclePaint.setAlpha(60);
+            innerCirclePaint.setAlpha(60);
+        }
+
         canvas.drawCircle(
                 outerCircleCenterPositionX,
                 outerCircleCenterPositionY,
@@ -57,10 +69,20 @@ public class Joystick {
                 innerCircleRadius,
                 innerCirclePaint
         );
+
+        // Restore alpha
+        outerCirclePaint.setAlpha(oldOuterAlpha);
+        innerCirclePaint.setAlpha(oldInnerAlpha);
     }
 
     public void update() {
-        updateInnerCirclePosition();
+        if (isPressed()) {
+            updateInnerCirclePosition();
+        } else if (!hasBeenInitialised) {
+            // Keep inner circle at center for placeholder
+            innerCircleCenterPositionX = outerCircleCenterPositionX;
+            innerCircleCenterPositionY = outerCircleCenterPositionY;
+        }
     }
 
     private void updateInnerCirclePosition() {
@@ -68,13 +90,13 @@ public class Joystick {
         innerCircleCenterPositionY = (int) (outerCircleCenterPositionY + actuatorY * outerCircleRadius);
     }
 
-    public void pressed(double x, double y) {
-        joystickCenterToTouchDistance = Math.sqrt(
-                Math.pow(outerCircleCenterPositionX - x, 2) +
-                        Math.pow(outerCircleCenterPositionY - y, 2)
-        );
-
-        pressed = joystickCenterToTouchDistance < outerCircleRadius;
+    public void setCenter(int x, int y) {
+        outerCircleCenterPositionX = x;
+        outerCircleCenterPositionY = y;
+        innerCircleCenterPositionX = x;
+        innerCircleCenterPositionY = y;
+        pressed = true;
+        hasBeenInitialised = true;
     }
 
     public void notPressed() {
