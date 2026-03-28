@@ -34,6 +34,10 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
     private static final int PARTICLE_COUNT = 8;
     private static final int SHAKE_DURATION = 4;
     private static final float SHAKE_INTENSITY = 10f;
+    
+    // Wave system constants
+    private static final int WAVE_BREAK_DURATION = 90; // 3 seconds
+    private static final int WAVE_ANNOUNCEMENT_DURATION = 60; // 2 seconds
 
     private final GameLoop gameLoop;
     private final Paint statsPaint;
@@ -73,6 +77,12 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
     private long gameOverTimestamp = 0;
     private static final long GAME_OVER_COOLDOWN_MS = 1000;
     private int shakeTimer = 0;
+
+    // Wave system state
+    private int waveNumber = 0;
+    private int enemiesToSpawn = 0;
+    private int waveBreakTimer = 0;
+    private int waveAnnouncementTimer = 0;
 
     public Game(Context context) {
         super(context);
@@ -221,6 +231,13 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         fireTimer = 0;
         damageFlashTimer = 0;
         shakeTimer = 0;
+        
+        // Reset wave system
+        waveNumber = 0;
+        enemiesToSpawn = 0;
+        waveBreakTimer = 30; // Short delay before first wave
+        waveAnnouncementTimer = 0;
+        
         releaseAllJoysticks();
         gameState = GameState.PLAYING;
         soundManager.playStart();
@@ -334,6 +351,14 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         // HUD (stable, no shake)
         drawHealthBar(canvas);
         drawScore(canvas);
+        
+        // Wave Announcement
+        if (waveAnnouncementTimer > 0) {
+            titlePaint.setAlpha(Math.min(255, waveAnnouncementTimer * 10));
+            canvas.drawText("Wave " + waveNumber, screenWidth / 2f, screenHeight / 2f, titlePaint);
+            titlePaint.setAlpha(255);
+        }
+        
         drawPauseButton(canvas);
         drawUPS(canvas);
         drawFPS(canvas);
@@ -391,6 +416,9 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
 
     private void drawScore(Canvas canvas) {
         canvas.drawText("Score: " + score, screenWidth / 2f, 50, scorePaint);
+        if (waveNumber > 0) {
+            canvas.drawText("Wave: " + waveNumber, screenWidth / 2f, 110, scorePaint);
+        }
     }
 
     private void drawUPS(Canvas canvas) {
@@ -411,6 +439,15 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         // Decrement timers
         if (damageFlashTimer > 0) damageFlashTimer--;
         if (shakeTimer > 0) shakeTimer--;
+        
+        // Wave system timers
+        if (waveBreakTimer > 0) {
+            waveBreakTimer--;
+            if (waveBreakTimer == 0) {
+                startNextWave();
+            }
+        }
+        if (waveAnnouncementTimer > 0) waveAnnouncementTimer--;
 
         joystick.update();
         aimJoystick.update();
@@ -513,12 +550,18 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
             return;
         }
 
-        // Enemy spawning
-        spawnTimer++;
-        int spawnInterval = Math.max(MIN_SPAWN_INTERVAL, INITIAL_SPAWN_INTERVAL - score * 2);
-        if (spawnTimer >= spawnInterval) {
-            spawnEnemy();
-            spawnTimer = 0;
+        // Structured Enemy spawning
+        if (enemiesToSpawn > 0) {
+            spawnTimer++;
+            int spawnInterval = Math.max(MIN_SPAWN_INTERVAL, INITIAL_SPAWN_INTERVAL - (waveNumber * 5));
+            if (spawnTimer >= spawnInterval) {
+                spawnEnemy();
+                enemiesToSpawn--;
+                spawnTimer = 0;
+            }
+        } else if (enemies.isEmpty() && waveBreakTimer == 0 && waveNumber > 0) {
+            // Wave cleared
+            waveBreakTimer = WAVE_BREAK_DURATION;
         }
 
         // Survival score: +1 per second
@@ -529,11 +572,18 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         }
     }
 
+    private void startNextWave() {
+        waveNumber++;
+        enemiesToSpawn = 5 + (waveNumber * 2);
+        waveAnnouncementTimer = WAVE_ANNOUNCEMENT_DURATION;
+        spawnTimer = 0;
+    }
+
     private EnemyType pickEnemyType() {
         int roll = random.nextInt(100);
-        if (score >= 30 && roll < 15) return EnemyType.ZIGZAG;
-        if (score >= 20 && roll < 30) return EnemyType.TANK;
-        if (score >= 10 && roll < 50) return EnemyType.FAST;
+        if (waveNumber >= 4 && roll < 15) return EnemyType.ZIGZAG;
+        if (waveNumber >= 3 && roll < 25) return EnemyType.TANK;
+        if (waveNumber >= 2 && roll < 40) return EnemyType.FAST;
         return EnemyType.NORMAL;
     }
 
