@@ -48,7 +48,6 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
     private static final int WAVE_ANNOUNCEMENT_DURATION = 90;
 
     private GameLoop gameLoop;
-    private final Paint statsPaint;
     private final Paint titlePaint;
     private final Paint subtitlePaint;
     private final Paint scorePaint;
@@ -115,10 +114,6 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
 
         SurfaceHolder surfaceHolder = getHolder();
         surfaceHolder.addCallback(this);
-
-        statsPaint = new Paint();
-        statsPaint.setColor(ContextCompat.getColor(context, R.color.magenta));
-        statsPaint.setTextSize(50);
 
         titlePaint = new Paint();
         titlePaint.setColor(Color.WHITE);
@@ -465,8 +460,6 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         }
         
         drawPauseButton(canvas);
-        drawUPS(canvas);
-        drawFPS(canvas);
     }
 
     private void drawPauseButton(Canvas canvas) {
@@ -496,16 +489,6 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         if (isNewHighScore) canvas.drawText("New High Score!", screenWidth / 2f, screenHeight / 2f + 100, subtitlePaint);
         else canvas.drawText("High Score: " + highScore, screenWidth / 2f, screenHeight / 2f + 100, subtitlePaint);
         canvas.drawText("Tap to Restart", screenWidth / 2f, screenHeight / 2f + 180, subtitlePaint);
-    }
-
-    private void drawUPS(Canvas canvas) {
-        if (gameLoop == null) return;
-        canvas.drawText("UPS " + Double.toString(gameLoop.getAverageUPS()), 30, 80, statsPaint);
-    }
-
-    private void drawFPS(Canvas canvas) {
-        if (gameLoop == null) return;
-        canvas.drawText("FPS " + Double.toString(gameLoop.getAverageFPS()), 30, 130, statsPaint);
     }
 
     public void update(double dt) {
