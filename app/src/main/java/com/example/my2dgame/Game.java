@@ -257,7 +257,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
     }
 
     private void startGame() {
-        player.reset(screenWidth / 2.0, screenHeight / 2.0);
+        player.reset(screenWidth / 2.0, screenHeight + 200);
         if (enemyManager != null) enemyManager.reset();
         projectilePool.addAll(projectiles);
         particlePool.addAll(particles);
@@ -271,10 +271,9 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         pickupTimer = 0;
         shakeTimer = 0;
         
-        waveNumber = startingWave - 1;
-        waveBreakTimer = 1;
-        waveAnnouncementTimer = 0;
-        isBossWave = false;
+        // Start first wave immediately with animation
+        waveNumber = startingWave;
+        triggerNextWaveAnnouncement();
         
         releaseAllJoysticks();
         gameState = GameState.PLAYING;
@@ -379,7 +378,9 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
             player.update(dt);
             player.clampToScreen(screenWidth, screenHeight);
         }
-        if (aimJoystick != null && player != null) {
+        
+        // Weapon Firing Logic
+        if (aimJoystick != null && player != null && !player.isAnimating()) {
             double ax = aimJoystick.actuatorX();
             double ay = aimJoystick.actuatorY();
             if (ax != 0 || ay != 0) {
@@ -392,6 +393,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
                 }
             } else fireTimer = 0;
         }
+        
         Iterator<Projectile> projIterator = projectiles.iterator();
         while (projIterator.hasNext()) {
             Projectile p = projIterator.next();
@@ -432,11 +434,19 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         if (pickupTimer >= Constants.PICKUP_SPAWN_INTERVAL) { spawnPickup(); pickupTimer = 0; }
         
         if (enemyManager.isWaveCleared() && waveBreakTimer == 0 && waveNumber > 0) { 
-            waveBreakTimer = Constants.WAVE_BREAK_DURATION; 
+            waveNumber++;
+            triggerNextWaveAnnouncement();
         }
         
         scoreTimer++;
         if (scoreTimer >= (int) GameLoop.MAX_UPS) { addScore(1, -1, -1); scoreTimer = 0; }
+    }
+
+    private void triggerNextWaveAnnouncement() {
+        waveBreakTimer = Constants.WAVE_BREAK_DURATION;
+        waveAnnouncementTimer = Constants.WAVE_ANNOUNCEMENT_DURATION;
+        isBossWave = (waveNumber % 5 == 0);
+        player.startFlyIn(screenWidth / 2.0, screenHeight / 2.0);
     }
 
     private void addScore(int amount, double x, double y) {
@@ -456,10 +466,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
     }
 
     private void startNextWave() {
-        waveNumber++;
-        isBossWave = (waveNumber % 5 == 0);
         enemyManager.startNextWave(waveNumber);
-        waveAnnouncementTimer = Constants.WAVE_ANNOUNCEMENT_DURATION;
     }
 
     private void spawnPickup() {
@@ -477,12 +484,9 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
             p = new Projectile(x, y, radius, dirX, dirY, getContext());
         }
         
-        // Homing Logic Integration
         if (player != null && player.hasHoming()) {
             Enemy closest = findNearestEnemy(x, y);
-            if (closest != null) {
-                p.setHoming(closest);
-            }
+            if (closest != null) p.setHoming(closest);
         }
         
         return p;
@@ -495,10 +499,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
             double dx = e.positionX() - x;
             double dy = e.positionY() - y;
             double dist = dx*dx + dy*dy;
-            if (dist < minDist) {
-                minDist = dist;
-                closest = e;
-            }
+            if (dist < minDist) { minDist = dist; closest = e; }
         }
         return closest;
     }

@@ -37,6 +37,11 @@ public class Player extends Circle {
     private float rotationAngle = 0f;
     private final EngineTrail engineTrail;
 
+    // Animation State
+    private boolean isAnimating = false;
+    private double targetX, targetY;
+    private static final double FLY_IN_SPEED = 600.0;
+
     public Player(Context context, Joystick joystick, double positionX, double positionY, float radius) {
         super(ContextCompat.getColor(context, R.color.player), positionX, positionY, radius);
         this.joystick = joystick;
@@ -47,30 +52,19 @@ public class Player extends Circle {
         shieldPaint.setStyle(Paint.Style.STROKE);
         shieldPaint.setStrokeWidth(10);
 
-        // Use cache instead of decoding and processing every time
         sprite = SpriteCache.getSprite(context, R.drawable.spaceship);
-        
-        // Apply tint
         spritePaint.setColorFilter(new PorterDuffColorFilter(paint.getColor(), PorterDuff.Mode.SRC_ATOP));
-        
         engineTrail = new EngineTrail();
     }
 
-    public int getHealthPoints() {
-        return healthPoints;
-    }
-
-    public int getMaxHealth() {
-        return MAX_HEALTH;
-    }
-
-    public boolean isAlive() {
-        return healthPoints > 0;
-    }
+    public int getHealthPoints() { return healthPoints; }
+    public int getMaxHealth() { return MAX_HEALTH; }
+    public boolean isAlive() { return healthPoints > 0; }
 
     public void takeDamage() {
+        if (isAnimating) return; // Invulnerable while flying in
         if (shieldTimer > 0) {
-            shieldTimer = 0; // Shield breaks on hit
+            shieldTimer = 0;
             return;
         }
         healthPoints--;
@@ -87,36 +81,29 @@ public class Player extends Circle {
         shieldTimer = 0;
         homingTimer = 0;
         rotationAngle = 0f;
+        isAnimating = false;
     }
+
+    public void startFlyIn(double tx, double ty) {
+        this.targetX = tx;
+        this.targetY = ty;
+        this.isAnimating = true;
+    }
+
+    public boolean isAnimating() { return isAnimating; }
 
     public void applyPickup(PickupType type) {
         switch (type) {
-            case HEALTH:
-                healthPoints = Math.min(MAX_HEALTH, healthPoints + 2);
-                break;
-            case SPEED:
-                speedBoostTimer = EFFECT_DURATION;
-                break;
-            case RAPID_FIRE:
-                rapidFireTimer = EFFECT_DURATION;
-                break;
-            case SHIELD:
-                shieldTimer = EFFECT_DURATION;
-                break;
-            case HOMING:
-                homingTimer = EFFECT_DURATION;
-                break;
+            case HEALTH: healthPoints = Math.min(MAX_HEALTH, healthPoints + 2); break;
+            case SPEED: speedBoostTimer = EFFECT_DURATION; break;
+            case RAPID_FIRE: rapidFireTimer = EFFECT_DURATION; break;
+            case SHIELD: shieldTimer = EFFECT_DURATION; break;
+            case HOMING: homingTimer = EFFECT_DURATION; break;
         }
     }
 
-    public boolean hasRapidFire() {
-        return rapidFireTimer > 0;
-    }
-
-    public boolean hasHoming() {
-        return homingTimer > 0;
-    }
-
+    public boolean hasRapidFire() { return rapidFireTimer > 0; }
+    public boolean hasHoming() { return homingTimer > 0; }
     public int getSpeedBoostTimer() { return speedBoostTimer; }
     public int getRapidFireTimer() { return rapidFireTimer; }
     public int getShieldTimer() { return shieldTimer; }
@@ -124,22 +111,37 @@ public class Player extends Circle {
 
     @Override
     public void update(double dt) {
-        double currentSpeed = SPEED_PPS * (speedBoostTimer > 0 ? 1.6 : 1.0);
-        velocityX = joystick.actuatorX() * currentSpeed;
-        velocityY = joystick.actuatorY() * currentSpeed;
-        
-        positionX += velocityX * dt;
-        positionY += velocityY * dt;
+        if (isAnimating) {
+            double dx = targetX - positionX;
+            double dy = targetY - positionY;
+            double dist = Math.sqrt(dx*dx + dy*dy);
+            
+            if (dist < 10) {
+                positionX = targetX;
+                positionY = targetY;
+                isAnimating = false;
+            } else {
+                velocityX = (dx / dist) * FLY_IN_SPEED;
+                velocityY = (dy / dist) * FLY_IN_SPEED;
+                positionX += velocityX * dt;
+                positionY += velocityY * dt;
+                rotationAngle = (float) Math.toDegrees(Math.atan2(velocityY, velocityX)) + 90;
+                engineTrail.emit(positionX, positionY, radius, rotationAngle);
+            }
+        } else {
+            double currentSpeed = SPEED_PPS * (speedBoostTimer > 0 ? 1.6 : 1.0);
+            velocityX = joystick.actuatorX() * currentSpeed;
+            velocityY = joystick.actuatorY() * currentSpeed;
+            positionX += velocityX * dt;
+            positionY += velocityY * dt;
 
-        // Update rotation based on movement direction
-        if (velocityX != 0 || velocityY != 0) {
-            rotationAngle = (float) Math.toDegrees(Math.atan2(velocityY, velocityX)) + 90;
-            // Emit trail when moving
-            engineTrail.emit(positionX, positionY, radius, rotationAngle);
+            if (velocityX != 0 || velocityY != 0) {
+                rotationAngle = (float) Math.toDegrees(Math.atan2(velocityY, velocityX)) + 90;
+                engineTrail.emit(positionX, positionY, radius, rotationAngle);
+            }
         }
         
         engineTrail.update();
-
         if (speedBoostTimer > 0) speedBoostTimer--;
         if (rapidFireTimer > 0) rapidFireTimer--;
         if (shieldTimer > 0) shieldTimer--;
@@ -148,21 +150,12 @@ public class Player extends Circle {
 
     @Override
     public void draw(Canvas canvas) {
-        // Draw trail behind the ship
         engineTrail.draw(canvas);
-
-        dstRect.set(
-            (int) (positionX - radius),
-            (int) (positionY - radius),
-            (int) (positionX + radius),
-            (int) (positionY + radius)
-        );
-        
+        dstRect.set((int) (positionX - radius), (int) (positionY - radius), (int) (positionX + radius), (int) (positionY + radius));
         canvas.save();
         canvas.rotate(rotationAngle, (float) positionX, (float) positionY);
         canvas.drawBitmap(sprite, null, dstRect, spritePaint);
         canvas.restore();
-
         if (shieldTimer > 0) {
             canvas.drawCircle((float)positionX, (float)positionY, radius + 10, shieldPaint);
         }
