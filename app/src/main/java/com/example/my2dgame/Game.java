@@ -36,9 +36,9 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
     private static final int PAUSE_BUTTON_MARGIN = 20;
     private static final int PARTICLE_COUNT = 8;
     private static final int SHAKE_DURATION = 4;
-    private static final int BOSS_SHAKE_DURATION = 8;
-    private static final float SHAKE_INTENSITY = 10f;
-    private static final float BOSS_SHAKE_INTENSITY = 20f;
+    private static final int BOSS_SHAKE_DURATION = 12;
+    private static final float SHAKE_INTENSITY = 12f;
+    private static final float BOSS_SHAKE_INTENSITY = 35f;
     private static final int PICKUP_SPAWN_INTERVAL = 450; // every 15 seconds
     
     // Wave system constants
@@ -363,7 +363,8 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         // Screen shake offset
         boolean shaking = shakeTimer > 0;
         if (shaking) {
-            float intensity = shakeTimer * (currentShakeIntensity / currentShakeDuration);
+            float progress = (float) shakeTimer / currentShakeDuration;
+            float intensity = progress * currentShakeIntensity;
             float offsetX = (random.nextFloat() * 2 - 1) * intensity;
             float offsetY = (random.nextFloat() * 2 - 1) * intensity;
             canvas.save();
@@ -380,9 +381,6 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         }
         for (Particle particle : particles) {
             particle.draw(canvas);
-        }
-        for (Particle p : particles) {
-            p.draw(canvas);
         }
         for (Pickup pickup : pickups) {
             pickup.draw(canvas);
@@ -583,6 +581,16 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
                     enemyPool.add(enemy);
                     enemyIterator.remove();
                     score += enemy.isBoss() ? BOSS_SCORE_BONUS : KILL_SCORE_BONUS;
+                    
+                    // Kill shake
+                    if (enemy.isBoss()) {
+                        triggerShake(BOSS_SHAKE_DURATION, BOSS_SHAKE_INTENSITY);
+                    } else {
+                        triggerShake(SHAKE_DURATION, SHAKE_INTENSITY * 0.8f);
+                    }
+                } else {
+                    // Impact shake (lighter)
+                    triggerShake(2, SHAKE_INTENSITY * 0.3f);
                 }
             }
         }
@@ -604,15 +612,8 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
                     soundManager.playHit();
                     damageFlashTimer = DAMAGE_FLASH_DURATION;
                     
-                    if (enemy.isBoss()) {
-                        shakeTimer = BOSS_SHAKE_DURATION;
-                        currentShakeDuration = BOSS_SHAKE_DURATION;
-                        currentShakeIntensity = BOSS_SHAKE_INTENSITY;
-                    } else {
-                        shakeTimer = SHAKE_DURATION;
-                        currentShakeDuration = SHAKE_DURATION;
-                        currentShakeIntensity = SHAKE_INTENSITY;
-                    }
+                    // Heavy shake when player is hit
+                    triggerShake(BOSS_SHAKE_DURATION, BOSS_SHAKE_INTENSITY);
                 }
             }
         }
@@ -670,6 +671,14 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         if (scoreTimer >= (int) GameLoop.MAX_UPS) {
             score++;
             scoreTimer = 0;
+        }
+    }
+
+    private void triggerShake(int duration, float intensity) {
+        if (intensity > currentShakeIntensity || shakeTimer <= 0) {
+            shakeTimer = duration;
+            currentShakeDuration = duration;
+            currentShakeIntensity = intensity;
         }
     }
 

@@ -15,6 +15,7 @@ import com.example.my2dgame.SpriteCache;
 public class Enemy extends Circle {
 
     private static final double BASE_SPEED_PPS = 400.0 * 0.7;
+    private static final int FLASH_DURATION = 4;
 
     private final Player player;
     private EnemyType type;
@@ -31,6 +32,9 @@ public class Enemy extends Circle {
     private final Paint spritePaint = new Paint();
     private float rotationAngle = 0f;
     private float rotationSpeed = 0f;
+    private int flashTimer = 0;
+    private final PorterDuffColorFilter tintFilter;
+    private final PorterDuffColorFilter flashFilter = new PorterDuffColorFilter(Color.WHITE, PorterDuff.Mode.SRC_ATOP);
 
     public Enemy(int color, Player player, double positionX, double positionY, float radius, EnemyType type, Context context) {
         super(color, positionX, positionY, radius);
@@ -46,13 +50,11 @@ public class Enemy extends Circle {
         healthBarBgPaint = new Paint();
         healthBarBgPaint.setColor(Color.DKGRAY);
 
-        // Optimization: Use SpriteCache
         this.sprite = SpriteCache.getSprite(context, R.drawable.asteroid);
         
-        // Apply tint
-        spritePaint.setColorFilter(new PorterDuffColorFilter(color, PorterDuff.Mode.SRC_ATOP));
+        tintFilter = new PorterDuffColorFilter(color, PorterDuff.Mode.SRC_ATOP);
+        spritePaint.setColorFilter(tintFilter);
         
-        // Random rotation speed for asteroids
         rotationSpeed = (float) (Math.random() * 180 - 90);
     }
 
@@ -72,6 +74,7 @@ public class Enemy extends Circle {
 
     public boolean takeDamage() {
         health--;
+        flashTimer = FLASH_DURATION;
         return health <= 0;
     }
 
@@ -79,9 +82,6 @@ public class Enemy extends Circle {
         return (float) health / maxHealth;
     }
 
-    /**
-     * Reinitialize this enemy for object pooling reuse.
-     */
     public void reset(int color, double positionX, double positionY, float radius, EnemyType type) {
         this.positionX = positionX;
         this.positionY = positionY;
@@ -97,13 +97,15 @@ public class Enemy extends Circle {
         this.maxHealth = 1;
         this.rotationAngle = 0f;
         this.rotationSpeed = (float) (Math.random() * 180 - 90);
+        this.flashTimer = 0;
         
-        // Update tint for reused object
         spritePaint.setColorFilter(new PorterDuffColorFilter(color, PorterDuff.Mode.SRC_ATOP));
     }
 
     @Override
     public void update(double dt) {
+        if (flashTimer > 0) flashTimer--;
+
         double distanceToTargetX = player.positionX() - positionX;
         double distanceToTargetY = player.positionY() - positionY;
         double distanceToTarget = GameObject.getDistanceBetweenObjects(this, player);
@@ -130,7 +132,6 @@ public class Enemy extends Circle {
         positionX += velocityX * dt;
         positionY += velocityY * dt;
         
-        // For asteroids, continuous tumbling rotation looks better than facing direction
         rotationAngle += rotationSpeed * dt;
     }
 
@@ -145,6 +146,13 @@ public class Enemy extends Circle {
         
         canvas.save();
         canvas.rotate(rotationAngle, (float) positionX, (float) positionY);
+        
+        if (flashTimer > 0) {
+            spritePaint.setColorFilter(flashFilter);
+        } else {
+            spritePaint.setColorFilter(tintFilter);
+        }
+
         canvas.drawBitmap(sprite, null, dstRect, spritePaint);
         canvas.restore();
 
