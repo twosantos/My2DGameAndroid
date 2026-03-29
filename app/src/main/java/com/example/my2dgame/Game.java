@@ -95,6 +95,9 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
     private int waveAnnouncementTimer = 0;
     private boolean isBossWave = false;
 
+    // Parallax Background
+    private List<ParallaxLayer> parallaxLayers;
+
     public Game(Context context) {
         super(context);
 
@@ -280,6 +283,13 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         screenWidth = getWidth();
         screenHeight = getHeight();
 
+        if (parallaxLayers == null) {
+            parallaxLayers = new ArrayList<>();
+            parallaxLayers.add(new ParallaxLayer(screenWidth, screenHeight, 80, 1f, 2f, 0, 15f, Color.GRAY));
+            parallaxLayers.add(new ParallaxLayer(screenWidth, screenHeight, 40, 2f, 4f, 0, 35f, Color.LTGRAY));
+            parallaxLayers.add(new ParallaxLayer(screenWidth, screenHeight, 15, 3f, 6f, 0, 70f, Color.WHITE));
+        }
+
         if (joystick == null) {
             joystick = new Joystick(
                     (int) (screenWidth * 0.12),
@@ -360,6 +370,9 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
     }
 
     private void drawPlaying(Canvas canvas) {
+        // Background
+        canvas.drawColor(Color.rgb(5, 5, 15));
+
         // Screen shake offset
         boolean shaking = shakeTimer > 0;
         if (shaking) {
@@ -369,6 +382,13 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
             float offsetY = (random.nextFloat() * 2 - 1) * intensity;
             canvas.save();
             canvas.translate(offsetX, offsetY);
+        }
+
+        // Parallax Background
+        if (parallaxLayers != null) {
+            for (ParallaxLayer layer : parallaxLayers) {
+                layer.draw(canvas);
+            }
         }
 
         // Game objects
@@ -485,6 +505,13 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
     }
 
     public void update(double dt) {
+        // Update Parallax Background
+        if (parallaxLayers != null) {
+            for (ParallaxLayer layer : parallaxLayers) {
+                layer.update(dt);
+            }
+        }
+
         if (gameState != GameState.PLAYING) {
             return;
         }
