@@ -425,7 +425,6 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         if (aimJoystick != null) aimJoystick.draw(canvas);
         if (shaking) canvas.restore();
 
-        // UX: Low Health Vignette
         if (player != null && player.getHealthPoints() <= 2) {
             vignettePaint.setAlpha((int) (Math.abs(Math.sin(System.currentTimeMillis() / 300.0)) * 150));
             canvas.drawRect(0, 0, screenWidth, screenHeight, vignettePaint);
@@ -434,7 +433,6 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         if (damageFlashTimer > 0) canvas.drawColor(Color.argb(100, 255, 0, 0));
         healthBar.draw(canvas, player, screenWidth);
         
-        // UX: Score Pop animation
         float scoreScale = 1.0f;
         if (scorePopTimer > 0) {
             scoreScale = 1.0f + (scorePopTimer / (float) SCORE_POP_DURATION) * 0.3f;
@@ -447,7 +445,6 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         canvas.drawText("Score: " + score, screenWidth / 2f, 130, scorePaint);
         if (waveNumber > 0) canvas.drawText("Wave: " + waveNumber, screenWidth / 2f, 180, scorePaint);
 
-        // UX: Animated Wave Announcement
         if (waveAnnouncementTimer > 0) {
             float animProgress = (float) waveAnnouncementTimer / WAVE_ANNOUNCEMENT_DURATION;
             float waveScale = 1.0f + (animProgress * 0.5f);
@@ -538,6 +535,8 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
                 pickupIterator.remove();
             } else if (p.isExpired()) pickupIterator.remove();
         }
+        
+        List<Enemy> splitEnemies = new ArrayList<>();
         Iterator<Enemy> enemyIterator = enemies.iterator();
         while (enemyIterator.hasNext()) {
             Enemy enemy = enemyIterator.next();
@@ -552,6 +551,18 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
                     spawnParticles(enemy.positionX(), enemy.positionY(), enemy.getType().getColor());
                     int bonus = enemy.isBoss() ? BOSS_SCORE_BONUS : KILL_SCORE_BONUS;
                     addScore(bonus, enemy.positionX(), enemy.positionY());
+                    
+                    if (enemy.getType() == EnemyType.SPLITTER) {
+                        float scrapRadius = (float)(screenHeight * 0.03 * EnemyType.SMALL.getSizeMultiplier());
+                        for (int i = 0; i < 3; i++) {
+                            double angle = i * (2 * Math.PI / 3);
+                            double dist = enemy.getRadius(); // Separation offset
+                            double sx = enemy.positionX() + Math.cos(angle) * dist;
+                            double sy = enemy.positionY() + Math.sin(angle) * dist;
+                            splitEnemies.add(obtainEnemy(EnemyType.SMALL.getColor(), sx, sy, scrapRadius, EnemyType.SMALL));
+                        }
+                    }
+                    
                     enemyPool.add(enemy);
                     enemyIterator.remove();
                     if (enemy.isBoss()) triggerShake(BOSS_SHAKE_DURATION, BOSS_SHAKE_INTENSITY);
@@ -559,6 +570,8 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
                 } else triggerShake(2, SHAKE_INTENSITY * 0.3f);
             }
         }
+        enemies.addAll(splitEnemies);
+
         if (player != null) {
             enemyIterator = enemies.iterator();
             while (enemyIterator.hasNext()) {
@@ -630,9 +643,10 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
 
     private EnemyType pickEnemyType() {
         int roll = random.nextInt(100);
-        if (waveNumber >= 4 && roll < 15) return EnemyType.ZIGZAG;
-        if (waveNumber >= 3 && roll < 25) return EnemyType.TANK;
-        if (waveNumber >= 2 && roll < 40) return EnemyType.FAST;
+        if (waveNumber >= 6 && roll < 15) return EnemyType.SPLITTER;
+        if (waveNumber >= 4 && roll < 25) return EnemyType.ZIGZAG;
+        if (waveNumber >= 3 && roll < 35) return EnemyType.TANK;
+        if (waveNumber >= 2 && roll < 50) return EnemyType.FAST;
         return EnemyType.NORMAL;
     }
 
