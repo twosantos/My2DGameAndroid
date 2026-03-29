@@ -117,6 +117,11 @@ public class Player extends Circle {
         return homingTimer > 0;
     }
 
+    public int getSpeedBoostTimer() { return speedBoostTimer; }
+    public int getRapidFireTimer() { return rapidFireTimer; }
+    public int getShieldTimer() { return shieldTimer; }
+    public int getHomingTimer() { return homingTimer; }
+
     @Override
     public void update(double dt) {
         double currentSpeed = SPEED_PPS * (speedBoostTimer > 0 ? 1.6 : 1.0);

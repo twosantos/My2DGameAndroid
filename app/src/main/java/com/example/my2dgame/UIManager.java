@@ -6,6 +6,7 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.RadialGradient;
+import android.graphics.RectF;
 import android.graphics.Shader;
 import androidx.core.content.ContextCompat;
 import com.example.my2dgame.object.Player;
@@ -20,9 +21,12 @@ public class UIManager {
     private final Paint selectorPaint;
     private final Paint vignettePaint;
     private final Paint statsPaint;
+    private final Paint timerPaint;
+    private final Paint timerBgPaint;
     
     private final HealthBar healthBar;
     private final Context context;
+    private final RectF timerRect = new RectF();
 
     public UIManager(Context context) {
         this.context = context;
@@ -66,6 +70,14 @@ public class UIManager {
         vignettePaint = new Paint();
         vignettePaint.setStyle(Paint.Style.FILL);
 
+        timerPaint = new Paint();
+        timerPaint.setStyle(Paint.Style.FILL);
+        timerPaint.setAntiAlias(true);
+
+        timerBgPaint = new Paint();
+        timerBgPaint.setColor(Color.argb(100, 0, 0, 0));
+        timerBgPaint.setStyle(Paint.Style.FILL);
+
         healthBar = new HealthBar(context);
     }
 
@@ -107,7 +119,6 @@ public class UIManager {
     }
 
     public void drawHUD(Canvas canvas, Player player, int screenWidth, int screenHeight, int score, int waveNumber, int scorePopTimer, int waveAnnouncementTimer, boolean isBossWave) {
-        // UX: Low Health Vignette
         if (player != null && player.getHealthPoints() <= 2) {
             vignettePaint.setAlpha((int) (Math.abs(Math.sin(System.currentTimeMillis() / 300.0)) * 150));
             canvas.drawRect(0, 0, screenWidth, screenHeight, vignettePaint);
@@ -138,7 +149,42 @@ public class UIManager {
             titlePaint.setTextSize(120);
         }
         
+        drawPowerupTimers(canvas, player, screenWidth, screenHeight);
         drawPauseButton(canvas, screenWidth);
+    }
+
+    private void drawPowerupTimers(Canvas canvas, Player player, int screenWidth, int screenHeight) {
+        if (player == null) return;
+
+        float x = 30;
+        float y = screenHeight - 150;
+        float barWidth = 200;
+        float barHeight = 15;
+        float spacing = 40;
+
+        // Draw each active boost
+        y = drawTimer(canvas, "SPEED", player.getSpeedBoostTimer(), Color.CYAN, x, y, barWidth, barHeight, spacing);
+        y = drawTimer(canvas, "FIRE", player.getRapidFireTimer(), Color.YELLOW, x, y, barWidth, barHeight, spacing);
+        y = drawTimer(canvas, "SHIELD", player.getShieldTimer(), Color.MAGENTA, x, y, barWidth, barHeight, spacing);
+        y = drawTimer(canvas, "HOMING", player.getHomingTimer(), Color.rgb(255, 100, 0), x, y, barWidth, barHeight, spacing);
+    }
+
+    private float drawTimer(Canvas canvas, String label, int ticks, int color, float x, float y, float width, float height, float spacing) {
+        if (ticks <= 0) return y;
+
+        float ratio = (float) ticks / 300; // 300 is EFFECT_DURATION
+        statsPaint.setTextSize(30);
+        statsPaint.setColor(Color.WHITE);
+        canvas.drawText(label, x + width/2, y - 5, statsPaint);
+
+        timerRect.set(x, y, x + width, y + height);
+        canvas.drawRoundRect(timerRect, 5, 5, timerBgPaint);
+
+        timerPaint.setColor(color);
+        timerRect.set(x, y, x + width * ratio, y + height);
+        canvas.drawRoundRect(timerRect, 5, 5, timerPaint);
+
+        return y - spacing;
     }
 
     private void drawPauseButton(Canvas canvas, int screenWidth) {
