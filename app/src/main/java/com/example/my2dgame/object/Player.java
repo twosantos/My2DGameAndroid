@@ -11,6 +11,7 @@ import android.graphics.Rect;
 
 import androidx.core.content.ContextCompat;
 
+import com.example.my2dgame.Constants;
 import com.example.my2dgame.EngineTrail;
 import com.example.my2dgame.Joystick;
 import com.example.my2dgame.PickupType;
@@ -27,6 +28,7 @@ public class Player extends Circle {
     private int speedBoostTimer = 0;
     private int rapidFireTimer = 0;
     private int shieldTimer = 0;
+    private int homingTimer = 0;
     
     private final Paint shieldPaint;
     private final Bitmap sprite;
@@ -83,6 +85,7 @@ public class Player extends Circle {
         speedBoostTimer = 0;
         rapidFireTimer = 0;
         shieldTimer = 0;
+        homingTimer = 0;
         rotationAngle = 0f;
     }
 
@@ -100,11 +103,18 @@ public class Player extends Circle {
             case SHIELD:
                 shieldTimer = EFFECT_DURATION;
                 break;
+            case HOMING:
+                homingTimer = EFFECT_DURATION;
+                break;
         }
     }
 
     public boolean hasRapidFire() {
         return rapidFireTimer > 0;
+    }
+
+    public boolean hasHoming() {
+        return homingTimer > 0;
     }
 
     @Override
@@ -128,6 +138,7 @@ public class Player extends Circle {
         if (speedBoostTimer > 0) speedBoostTimer--;
         if (rapidFireTimer > 0) rapidFireTimer--;
         if (shieldTimer > 0) shieldTimer--;
+        if (homingTimer > 0) homingTimer--;
     }
 
     @Override

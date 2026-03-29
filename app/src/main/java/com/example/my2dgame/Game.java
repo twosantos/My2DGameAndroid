@@ -469,8 +469,38 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
     }
 
     private Projectile obtainProjectile(double x, double y, float radius, double dirX, double dirY) {
-        if (!projectilePool.isEmpty()) { Projectile p = projectilePool.remove(projectilePool.size() - 1); p.reset(x, y, radius, dirX, dirY); return p; }
-        return new Projectile(x, y, radius, dirX, dirY, getContext());
+        Projectile p;
+        if (!projectilePool.isEmpty()) {
+            p = projectilePool.remove(projectilePool.size() - 1);
+            p.reset(x, y, radius, dirX, dirY);
+        } else {
+            p = new Projectile(x, y, radius, dirX, dirY, getContext());
+        }
+        
+        // Homing Logic Integration
+        if (player != null && player.hasHoming()) {
+            Enemy closest = findNearestEnemy(x, y);
+            if (closest != null) {
+                p.setHoming(closest);
+            }
+        }
+        
+        return p;
+    }
+
+    private Enemy findNearestEnemy(double x, double y) {
+        Enemy closest = null;
+        double minDist = Double.MAX_VALUE;
+        for (Enemy e : enemyManager.getEnemies()) {
+            double dx = e.positionX() - x;
+            double dy = e.positionY() - y;
+            double dist = dx*dx + dy*dy;
+            if (dist < minDist) {
+                minDist = dist;
+                closest = e;
+            }
+        }
+        return closest;
     }
 
     private void spawnParticles(double x, double y, int color) {

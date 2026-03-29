@@ -8,6 +8,7 @@ import android.graphics.Paint;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffColorFilter;
 import android.graphics.Rect;
+import com.example.my2dgame.Constants;
 import com.example.my2dgame.EnemyType;
 import com.example.my2dgame.R;
 import com.example.my2dgame.SpriteCache;
@@ -33,7 +34,7 @@ public class Enemy extends Circle {
     private float rotationAngle = 0f;
     private float rotationSpeed = 0f;
     private int flashTimer = 0;
-    private final PorterDuffColorFilter tintFilter;
+    private PorterDuffColorFilter tintFilter;
     private final PorterDuffColorFilter flashFilter = new PorterDuffColorFilter(Color.WHITE, PorterDuff.Mode.SRC_ATOP);
 
     public Enemy(int color, Player player, double positionX, double positionY, float radius, EnemyType type, Context context) {
@@ -78,6 +79,10 @@ public class Enemy extends Circle {
         return health <= 0;
     }
 
+    public boolean isDead() {
+        return health <= 0;
+    }
+
     public float getHealthRatio() {
         return (float) health / maxHealth;
     }
@@ -99,7 +104,8 @@ public class Enemy extends Circle {
         this.rotationSpeed = (float) (Math.random() * 180 - 90);
         this.flashTimer = 0;
         
-        spritePaint.setColorFilter(new PorterDuffColorFilter(color, PorterDuff.Mode.SRC_ATOP));
+        this.tintFilter = new PorterDuffColorFilter(color, PorterDuff.Mode.SRC_ATOP);
+        spritePaint.setColorFilter(tintFilter);
     }
 
     @Override

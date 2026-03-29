@@ -21,45 +21,63 @@ public class Projectile extends Circle {
     private final Rect dstRect = new Rect();
     private final Paint spritePaint = new Paint();
     private float rotationAngle = 0f;
+    private Enemy target = null;
+    private boolean isHoming = false;
 
     public Projectile(double positionX, double positionY, float radius, double directionX, double directionY, Context context) {
         super(Color.CYAN, positionX, positionY, radius);
         velocityX = directionX * SPEED_PPS;
         velocityY = directionY * SPEED_PPS;
         
-        // Optimization: Use SpriteCache
         sprite = SpriteCache.getSprite(context, R.drawable.rocket);
-        
-        // Apply tint
         spritePaint.setColorFilter(new PorterDuffColorFilter(Color.CYAN, PorterDuff.Mode.SRC_ATOP));
-        
-        // Initial rotation
         updateRotation();
     }
 
-    /**
-     * Reinitialize this projectile for object pooling reuse.
-     */
     public void reset(double positionX, double positionY, float radius, double directionX, double directionY) {
         this.positionX = positionX;
         this.positionY = positionY;
         this.radius = radius;
-        velocityX = directionX * SPEED_PPS;
-        velocityY = directionY * SPEED_PPS;
+        this.velocityX = directionX * SPEED_PPS;
+        this.velocityY = directionY * SPEED_PPS;
+        this.target = null;
+        this.isHoming = false;
+        spritePaint.setColorFilter(new PorterDuffColorFilter(Color.CYAN, PorterDuff.Mode.SRC_ATOP));
         updateRotation();
+    }
+
+    public void setHoming(Enemy target) {
+        this.isHoming = true;
+        this.target = target;
+        spritePaint.setColorFilter(new PorterDuffColorFilter(Color.rgb(255, 100, 0), PorterDuff.Mode.SRC_ATOP));
     }
 
     private void updateRotation() {
         if (velocityX != 0 || velocityY != 0) {
-            // Assuming the sprite faces BOTTOM-RIGHT (45 deg) by default.
-            // atan2(y, x) returns angle from positive X axis.
-            // For a sprite facing 45deg, we subtract 45deg to align it to 0.
             rotationAngle = (float) Math.toDegrees(Math.atan2(velocityY, velocityX)) - 45;
         }
     }
 
     @Override
     public void update(double dt) {
+        if (isHoming && target != null) {
+            // FIX: Use isDead() instead of takeDamage() to avoid dealing damage while just tracking
+            if (target.isDead()) {
+                target = null;
+            }
+            
+            if (target != null) {
+                double dx = target.positionX() - positionX;
+                double dy = target.positionY() - positionY;
+                double dist = Math.sqrt(dx*dx + dy*dy);
+                if (dist > 0) {
+                    velocityX = (dx / dist) * SPEED_PPS;
+                    velocityY = (dy / dist) * SPEED_PPS;
+                    updateRotation();
+                }
+            }
+        }
+
         positionX += velocityX * dt;
         positionY += velocityY * dt;
     }

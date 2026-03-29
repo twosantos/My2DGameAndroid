@@ -6,7 +6,8 @@ public enum PickupType {
     HEALTH(Color.GREEN, "Health Restore"),
     SPEED(Color.CYAN, "Speed Boost"),
     RAPID_FIRE(Color.YELLOW, "Rapid Fire"),
-    SHIELD(Color.MAGENTA, "Shield");
+    SHIELD(Color.MAGENTA, "Shield"),
+    HOMING(Color.rgb(255, 100, 0), "Homing Missiles");
 
     private final int color;
     private final String label;
