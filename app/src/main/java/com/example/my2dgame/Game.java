@@ -138,6 +138,14 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         prefs = context.getSharedPreferences("my2dgame", Context.MODE_PRIVATE);
         highScore = prefs.getInt("high_score", 0);
 
+        // Preload all sprites to avoid lag during gameplay
+        SpriteCache.preload(context,
+            R.drawable.spaceship,
+            R.drawable.asteroid,
+            R.drawable.rocket,
+            R.drawable.spiky_explosion
+        );
+
         setFocusable(true);
     }
 
@@ -372,6 +380,9 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         }
         for (Particle particle : particles) {
             particle.draw(canvas);
+        }
+        for (Particle p : particles) {
+            p.draw(canvas);
         }
         for (Pickup pickup : pickups) {
             pickup.draw(canvas);
@@ -738,7 +749,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
             p.reset(x, y, radius, dirX, dirY);
             return p;
         }
-        return new Projectile(x, y, radius, dirX, dirY);
+        return new Projectile(x, y, radius, dirX, dirY, getContext());
     }
 
     private Enemy obtainEnemy(int color, double x, double y, float radius, EnemyType type) {
@@ -747,7 +758,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
             e.reset(color, x, y, radius, type);
             return e;
         }
-        return new Enemy(color, player, x, y, radius, type);
+        return new Enemy(color, player, x, y, radius, type, getContext());
     }
 
     private void spawnParticles(double x, double y, int color) {
@@ -760,7 +771,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
             } else {
                 p = new Particle();
             }
-            p.init(x, y, pRadius, color, Math.cos(angle), Math.sin(angle));
+            p.init(x, y, pRadius, color, Math.cos(angle), Math.sin(angle), getContext());
             particles.add(p);
         }
     }

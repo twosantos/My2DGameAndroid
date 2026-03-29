@@ -1,9 +1,16 @@
 package com.example.my2dgame.object;
 
+import android.content.Context;
+import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
+import android.graphics.PorterDuff;
+import android.graphics.PorterDuffColorFilter;
+import android.graphics.Rect;
 import com.example.my2dgame.EnemyType;
+import com.example.my2dgame.R;
+import com.example.my2dgame.SpriteCache;
 
 public class Enemy extends Circle {
 
@@ -19,8 +26,13 @@ public class Enemy extends Circle {
     private boolean isBoss;
     private final Paint healthBarPaint;
     private final Paint healthBarBgPaint;
+    private final Bitmap sprite;
+    private final Rect dstRect = new Rect();
+    private final Paint spritePaint = new Paint();
+    private float rotationAngle = 0f;
+    private float rotationSpeed = 0f;
 
-    public Enemy(int color, Player player, double positionX, double positionY, float radius, EnemyType type) {
+    public Enemy(int color, Player player, double positionX, double positionY, float radius, EnemyType type, Context context) {
         super(color, positionX, positionY, radius);
         this.player = player;
         this.type = type;
@@ -33,6 +45,15 @@ public class Enemy extends Circle {
         healthBarPaint.setColor(Color.RED);
         healthBarBgPaint = new Paint();
         healthBarBgPaint.setColor(Color.DKGRAY);
+
+        // Optimization: Use SpriteCache
+        this.sprite = SpriteCache.getSprite(context, R.drawable.asteroid);
+        
+        // Apply tint
+        spritePaint.setColorFilter(new PorterDuffColorFilter(color, PorterDuff.Mode.SRC_ATOP));
+        
+        // Random rotation speed for asteroids
+        rotationSpeed = (float) (Math.random() * 180 - 90);
     }
 
     public EnemyType getType() {
@@ -74,6 +95,11 @@ public class Enemy extends Circle {
         this.isBoss = false;
         this.health = 1;
         this.maxHealth = 1;
+        this.rotationAngle = 0f;
+        this.rotationSpeed = (float) (Math.random() * 180 - 90);
+        
+        // Update tint for reused object
+        spritePaint.setColorFilter(new PorterDuffColorFilter(color, PorterDuff.Mode.SRC_ATOP));
     }
 
     @Override
@@ -103,11 +129,25 @@ public class Enemy extends Circle {
         }
         positionX += velocityX * dt;
         positionY += velocityY * dt;
+        
+        // For asteroids, continuous tumbling rotation looks better than facing direction
+        rotationAngle += rotationSpeed * dt;
     }
 
     @Override
     public void draw(Canvas canvas) {
-        super.draw(canvas);
+        dstRect.set(
+            (int) (positionX - radius),
+            (int) (positionY - radius),
+            (int) (positionX + radius),
+            (int) (positionY + radius)
+        );
+        
+        canvas.save();
+        canvas.rotate(rotationAngle, (float) positionX, (float) positionY);
+        canvas.drawBitmap(sprite, null, dstRect, spritePaint);
+        canvas.restore();
+
         if (isBoss) {
             float barWidth = radius * 2;
             float barHeight = 15;
