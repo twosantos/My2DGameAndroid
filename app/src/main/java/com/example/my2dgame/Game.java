@@ -5,15 +5,11 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.graphics.Canvas;
 import android.graphics.Color;
-import android.graphics.Paint;
-import android.graphics.RadialGradient;
-import android.graphics.Shader;
 import android.view.MotionEvent;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 
 import androidx.annotation.NonNull;
-import androidx.core.content.ContextCompat;
 
 import com.example.my2dgame.object.Circle;
 import com.example.my2dgame.object.Enemy;
@@ -28,34 +24,7 @@ import java.util.Random;
 
 public class Game extends SurfaceView implements SurfaceHolder.Callback {
 
-    private static final int INITIAL_SPAWN_INTERVAL = 90;
-    private static final int MIN_SPAWN_INTERVAL = 20;
-    private static final int FIRE_INTERVAL = 10;
-    private static final int RAPID_FIRE_INTERVAL = 4;
-    private static final int DAMAGE_FLASH_DURATION = 6;
-    private static final int KILL_SCORE_BONUS = 3;
-    private static final int BOSS_SCORE_BONUS = 100;
-    private static final int PAUSE_BUTTON_SIZE = 80;
-    private static final int PAUSE_BUTTON_MARGIN = 20;
-    private static final int PARTICLE_COUNT = 8;
-    private static final int SHAKE_DURATION = 4;
-    private static final int BOSS_SHAKE_DURATION = 12;
-    private static final float SHAKE_INTENSITY = 12f;
-    private static final float BOSS_SHAKE_INTENSITY = 35f;
-    private static final int PICKUP_SPAWN_INTERVAL = 450;
-    
-    private static final int WAVE_BREAK_DURATION = 90;
-    private static final int WAVE_ANNOUNCEMENT_DURATION = 90;
-
     private GameLoop gameLoop;
-    private final Paint titlePaint;
-    private final Paint subtitlePaint;
-    private final Paint scorePaint;
-    private final Paint pauseButtonPaint;
-    private final Paint buttonPaint;
-    private final Paint selectorPaint;
-    private final Paint vignettePaint;
-    
     private final Random random = new Random();
     private final SoundManager soundManager;
     private final SharedPreferences prefs;
@@ -65,9 +34,8 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
     private int movePointerId = -1;
     private int aimPointerId = -1;
     private Player player;
-    private final List<Enemy> enemies = new ArrayList<>();
+    
     private final List<Projectile> projectiles = new ArrayList<>();
-    private final List<Enemy> enemyPool = new ArrayList<>();
     private final List<Projectile> projectilePool = new ArrayList<>();
     private final List<Particle> particles = new ArrayList<>();
     private final List<Particle> particlePool = new ArrayList<>();
@@ -80,31 +48,28 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
     private GameState gameState = GameState.MENU;
     private int score = 0;
     private int scoreTimer = 0;
-    private int spawnTimer = 0;
-    private int fireTimer = 0;
     private int damageFlashTimer = 0;
+    private int fireTimer = 0;
     private int pickupTimer = 0;
     private int highScore;
     private boolean isNewHighScore = false;
     private long gameOverTimestamp = 0;
     private static final long GAME_OVER_COOLDOWN_MS = 1000;
     private int shakeTimer = 0;
-    private float currentShakeIntensity = SHAKE_INTENSITY;
-    private int currentShakeDuration = SHAKE_DURATION;
+    private float currentShakeIntensity = Constants.SHAKE_INTENSITY;
+    private int currentShakeDuration = Constants.SHAKE_DURATION;
 
     // UI Feedback State
     private int scorePopTimer = 0;
-    private static final int SCORE_POP_DURATION = 15;
-    private float vignetteAlpha = 0;
 
     // UI Components
-    private HealthBar healthBar;
+    private UIManager uiManager;
+    private EnemyManager enemyManager;
     private List<ParallaxLayer> parallaxLayers;
 
     // Wave system state
     private int waveNumber = 0;
     private int startingWave = 1;
-    private int enemiesToSpawn = 0;
     private int waveBreakTimer = 0;
     private int waveAnnouncementTimer = 0;
     private boolean isBossWave = false;
@@ -115,48 +80,12 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         SurfaceHolder surfaceHolder = getHolder();
         surfaceHolder.addCallback(this);
 
-        titlePaint = new Paint();
-        titlePaint.setColor(Color.WHITE);
-        titlePaint.setTextSize(120);
-        titlePaint.setTextAlign(Paint.Align.CENTER);
-        titlePaint.setFakeBoldText(true);
-
-        subtitlePaint = new Paint();
-        subtitlePaint.setColor(Color.LTGRAY);
-        subtitlePaint.setTextSize(60);
-        subtitlePaint.setTextAlign(Paint.Align.CENTER);
-
-        scorePaint = new Paint();
-        scorePaint.setColor(Color.WHITE);
-        scorePaint.setTextSize(50);
-        scorePaint.setTextAlign(Paint.Align.CENTER);
-
-        pauseButtonPaint = new Paint();
-        pauseButtonPaint.setColor(Color.WHITE);
-        pauseButtonPaint.setAlpha(180);
-
-        buttonPaint = new Paint();
-        buttonPaint.setColor(Color.WHITE);
-        buttonPaint.setStyle(Paint.Style.STROKE);
-        buttonPaint.setStrokeWidth(5);
-        buttonPaint.setTextAlign(Paint.Align.CENTER);
-        buttonPaint.setTextSize(50);
-
-        selectorPaint = new Paint();
-        selectorPaint.setColor(Color.CYAN);
-        selectorPaint.setTextSize(60);
-        selectorPaint.setTextAlign(Paint.Align.CENTER);
-
-        vignettePaint = new Paint();
-        vignettePaint.setStyle(Paint.Style.FILL);
-
+        uiManager = new UIManager(context);
         soundManager = new SoundManager(context);
         soundManager.startMusic();
 
         prefs = context.getSharedPreferences("my2dgame", Context.MODE_PRIVATE);
         highScore = prefs.getInt("high_score", 0);
-
-        healthBar = new HealthBar(context);
 
         SpriteCache.preload(context,
             R.drawable.spaceship,
@@ -166,6 +95,26 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         );
 
         setFocusable(true);
+    }
+
+    public void onEnemyDestroyed(Enemy enemy) {
+        spawnParticles(enemy.positionX(), enemy.positionY(), enemy.getType().getColor());
+        int bonus = enemy.isBoss() ? Constants.BOSS_SCORE_BONUS : Constants.KILL_SCORE_BONUS;
+        addScore(bonus, enemy.positionX(), enemy.positionY());
+        if (enemy.isBoss()) triggerShake(Constants.BOSS_SHAKE_DURATION, Constants.BOSS_SHAKE_INTENSITY);
+        else triggerShake(Constants.SHAKE_DURATION, Constants.SHAKE_INTENSITY * 0.8f);
+    }
+
+    public void onEnemyHit(Enemy enemy) {
+        triggerShake(2, Constants.SHAKE_INTENSITY * 0.3f);
+    }
+
+    public void onPlayerHit(Enemy enemy) {
+        player.takeDamage();
+        spawnParticles(enemy.positionX(), enemy.positionY(), enemy.getType().getColor());
+        soundManager.playHit();
+        damageFlashTimer = Constants.DAMAGE_FLASH_DURATION;
+        triggerShake(Constants.BOSS_SHAKE_DURATION, Constants.BOSS_SHAKE_INTENSITY);
     }
 
     public void pause() {
@@ -301,32 +250,28 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
     }
 
     private boolean isTouchOnPauseButton(float x, float y) {
-        float btnX = screenWidth - PAUSE_BUTTON_SIZE - PAUSE_BUTTON_MARGIN;
-        float btnY = PAUSE_BUTTON_MARGIN;
-        return x >= btnX && x <= btnX + PAUSE_BUTTON_SIZE
-                && y >= btnY && y <= btnY + PAUSE_BUTTON_SIZE;
+        float btnX = screenWidth - Constants.PAUSE_BUTTON_SIZE - Constants.PAUSE_BUTTON_MARGIN;
+        float btnY = Constants.PAUSE_BUTTON_MARGIN;
+        return x >= btnX && x <= btnX + Constants.PAUSE_BUTTON_SIZE
+                && y >= btnY && y <= btnY + Constants.PAUSE_BUTTON_SIZE;
     }
 
     private void startGame() {
         player.reset(screenWidth / 2.0, screenHeight / 2.0);
-        enemyPool.addAll(enemies);
+        if (enemyManager != null) enemyManager.reset();
         projectilePool.addAll(projectiles);
         particlePool.addAll(particles);
-        enemies.clear();
         projectiles.clear();
         particles.clear();
         pickups.clear();
         floatingTexts.clear();
         score = 0;
         scoreTimer = 0;
-        spawnTimer = 0;
-        fireTimer = 0;
         damageFlashTimer = 0;
         pickupTimer = 0;
         shakeTimer = 0;
         
         waveNumber = startingWave - 1;
-        enemiesToSpawn = 0;
         waveBreakTimer = 1;
         waveAnnouncementTimer = 0;
         isBossWave = false;
@@ -341,16 +286,14 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         screenWidth = getWidth();
         screenHeight = getHeight();
 
+        uiManager.initVignette(screenWidth, screenHeight);
+
         if (parallaxLayers == null) {
             parallaxLayers = new ArrayList<>();
             parallaxLayers.add(new ParallaxLayer(screenWidth, screenHeight, 80, 1f, 2f, 0, 15f, Color.GRAY));
             parallaxLayers.add(new ParallaxLayer(screenWidth, screenHeight, 40, 2f, 4f, 0, 35f, Color.LTGRAY));
             parallaxLayers.add(new ParallaxLayer(screenWidth, screenHeight, 15, 3f, 6f, 0, 70f, Color.WHITE));
         }
-
-        RadialGradient gradient = new RadialGradient(screenWidth / 2f, screenHeight / 2f, screenWidth * 0.8f,
-                new int[]{Color.TRANSPARENT, Color.argb(150, 255, 0, 0)}, null, Shader.TileMode.CLAMP);
-        vignettePaint.setShader(gradient);
 
         if (joystick == null) {
             joystick = new Joystick((int) (screenWidth * 0.12), (int) (screenHeight * 0.75), (int) (screenHeight * 0.08), (int) (screenHeight * 0.045), Color.BLUE, Color.GRAY);
@@ -360,6 +303,9 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         }
         if (player == null) {
             player = new Player(getContext(), joystick, screenWidth / 2.0, screenHeight / 2.0, (float) (screenHeight * 0.035));
+        }
+        if (enemyManager == null) {
+            enemyManager = new EnemyManager(getContext(), player);
         }
 
         if (gameLoop == null || !gameLoop.isAlive()) {
@@ -384,25 +330,11 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         super.draw(canvas);
         if (canvas == null) return;
         switch (gameState) {
-            case MENU: drawMenu(canvas); break;
+            case MENU: uiManager.drawMenu(canvas, screenWidth, screenHeight, parallaxLayers, highScore, startingWave); break;
             case PLAYING: drawPlaying(canvas); break;
-            case PAUSED: drawPlaying(canvas); drawPauseOverlay(canvas); break;
-            case GAME_OVER: drawGameOver(canvas); break;
+            case PAUSED: drawPlaying(canvas); uiManager.drawPauseOverlay(canvas, screenWidth, screenHeight); break;
+            case GAME_OVER: uiManager.drawGameOver(canvas, screenWidth, screenHeight, score, highScore, isNewHighScore); break;
         }
-    }
-
-    private void drawMenu(Canvas canvas) {
-        canvas.drawColor(Color.rgb(5, 5, 15));
-        if (parallaxLayers != null) { for (ParallaxLayer layer : parallaxLayers) layer.draw(canvas); }
-        canvas.drawText("STAR DEFENDER", screenWidth / 2f, screenHeight / 2f - 150, titlePaint);
-        canvas.drawText("Tap to Start", screenWidth / 2f, screenHeight / 2f, subtitlePaint);
-        float centerY = screenHeight / 2f + 250;
-        canvas.drawText("Starting Wave", screenWidth / 2f, centerY - 80, buttonPaint);
-        canvas.drawText("<", screenWidth / 2f - 100, centerY + 15, selectorPaint);
-        canvas.drawText(String.valueOf(startingWave), screenWidth / 2f, centerY + 15, selectorPaint);
-        canvas.drawText(">", screenWidth / 2f + 100, centerY + 15, selectorPaint);
-        if (highScore > 0) canvas.drawText("Best: " + highScore, 150, 80, scorePaint);
-        canvas.drawText("EXIT", screenWidth - 120, screenHeight - 80, buttonPaint);
     }
 
     private void drawPlaying(Canvas canvas) {
@@ -416,7 +348,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         }
         if (parallaxLayers != null) { for (ParallaxLayer layer : parallaxLayers) layer.draw(canvas); }
         if (player != null) player.draw(canvas);
-        for (Enemy enemy : enemies) enemy.draw(canvas);
+        enemyManager.draw(canvas);
         for (Projectile projectile : projectiles) projectile.draw(canvas);
         for (Particle particle : particles) particle.draw(canvas);
         for (Pickup pickup : pickups) pickup.draw(canvas);
@@ -425,67 +357,9 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         if (aimJoystick != null) aimJoystick.draw(canvas);
         if (shaking) canvas.restore();
 
-        if (player != null && player.getHealthPoints() <= 2) {
-            vignettePaint.setAlpha((int) (Math.abs(Math.sin(System.currentTimeMillis() / 300.0)) * 150));
-            canvas.drawRect(0, 0, screenWidth, screenHeight, vignettePaint);
-        }
-
         if (damageFlashTimer > 0) canvas.drawColor(Color.argb(100, 255, 0, 0));
-        healthBar.draw(canvas, player, screenWidth);
         
-        float scoreScale = 1.0f;
-        if (scorePopTimer > 0) {
-            scoreScale = 1.0f + (scorePopTimer / (float) SCORE_POP_DURATION) * 0.3f;
-            scorePaint.setTextSize(50 * scoreScale);
-            scorePaint.setColor(Color.CYAN);
-        } else {
-            scorePaint.setTextSize(50);
-            scorePaint.setColor(Color.WHITE);
-        }
-        canvas.drawText("Score: " + score, screenWidth / 2f, 130, scorePaint);
-        if (waveNumber > 0) canvas.drawText("Wave: " + waveNumber, screenWidth / 2f, 180, scorePaint);
-
-        if (waveAnnouncementTimer > 0) {
-            float animProgress = (float) waveAnnouncementTimer / WAVE_ANNOUNCEMENT_DURATION;
-            float waveScale = 1.0f + (animProgress * 0.5f);
-            titlePaint.setTextSize(120 * waveScale);
-            titlePaint.setAlpha((int) (Math.min(1.0f, animProgress * 2) * 255));
-            String text = isBossWave ? "BOSS WAVE!" : "Wave " + waveNumber;
-            canvas.drawText(text, screenWidth / 2f, screenHeight / 2f, titlePaint);
-            titlePaint.setAlpha(255);
-            titlePaint.setTextSize(120);
-        }
-        
-        drawPauseButton(canvas);
-    }
-
-    private void drawPauseButton(Canvas canvas) {
-        float btnX = screenWidth - PAUSE_BUTTON_SIZE - PAUSE_BUTTON_MARGIN;
-        float btnY = PAUSE_BUTTON_MARGIN;
-        float barWidth = PAUSE_BUTTON_SIZE * 0.2f;
-        float barHeight = PAUSE_BUTTON_SIZE * 0.6f;
-        float barY = btnY + PAUSE_BUTTON_SIZE * 0.2f;
-        float gap = PAUSE_BUTTON_SIZE * 0.15f;
-        float centerX = btnX + PAUSE_BUTTON_SIZE / 2f;
-        canvas.drawRect(centerX - gap - barWidth, barY, centerX - gap, barY + barHeight, pauseButtonPaint);
-        canvas.drawRect(centerX + gap, barY, centerX + gap + barWidth, barY + barHeight, pauseButtonPaint);
-    }
-
-    private void drawPauseOverlay(Canvas canvas) {
-        canvas.drawColor(Color.argb(180, 0, 0, 0));
-        canvas.drawText("PAUSED", screenWidth / 2f, screenHeight / 2f - 50, titlePaint);
-        canvas.drawText("Tap to Resume", screenWidth / 2f, screenHeight / 2f + 60, subtitlePaint);
-        canvas.drawRect(screenWidth / 2f - 150, screenHeight - 180, screenWidth / 2f + 150, screenHeight - 80, buttonPaint);
-        canvas.drawText("QUIT TO OS", screenWidth / 2f, screenHeight - 115, buttonPaint);
-    }
-
-    private void drawGameOver(Canvas canvas) {
-        canvas.drawColor(Color.BLACK);
-        canvas.drawText("GAME OVER", screenWidth / 2f, screenHeight / 2f - 100, titlePaint);
-        canvas.drawText("Score: " + score, screenWidth / 2f, screenHeight / 2f + 20, subtitlePaint);
-        if (isNewHighScore) canvas.drawText("New High Score!", screenWidth / 2f, screenHeight / 2f + 100, subtitlePaint);
-        else canvas.drawText("High Score: " + highScore, screenWidth / 2f, screenHeight / 2f + 100, subtitlePaint);
-        canvas.drawText("Tap to Restart", screenWidth / 2f, screenHeight / 2f + 180, subtitlePaint);
+        uiManager.drawHUD(canvas, player, screenWidth, screenHeight, score, waveNumber, scorePopTimer, waveAnnouncementTimer, isBossWave);
     }
 
     public void update(double dt) {
@@ -510,7 +384,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
             double ay = aimJoystick.actuatorY();
             if (ax != 0 || ay != 0) {
                 fireTimer++;
-                int interval = player.hasRapidFire() ? RAPID_FIRE_INTERVAL : FIRE_INTERVAL;
+                int interval = player.hasRapidFire() ? Constants.RAPID_FIRE_INTERVAL : Constants.FIRE_INTERVAL;
                 if (fireTimer >= interval) {
                     double mag = Math.sqrt(ax * ax + ay * ay);
                     projectiles.add(obtainProjectile(player.positionX(), player.positionY(), (float) (screenHeight * 0.01), ax / mag, ay / mag));
@@ -524,7 +398,9 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
             p.update(dt);
             if (p.isOffScreen(screenWidth, screenHeight)) { projectilePool.add(p); projIterator.remove(); }
         }
-        for (Enemy enemy : enemies) { enemy.update(dt); enemy.clampToScreen(screenWidth, screenHeight); }
+        
+        enemyManager.update(dt, screenWidth, screenHeight, projectiles, projectilePool, this);
+
         Iterator<Pickup> pickupIterator = pickups.iterator();
         while (pickupIterator.hasNext()) {
             Pickup p = pickupIterator.next();
@@ -536,56 +412,6 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
             } else if (p.isExpired()) pickupIterator.remove();
         }
         
-        List<Enemy> splitEnemies = new ArrayList<>();
-        Iterator<Enemy> enemyIterator = enemies.iterator();
-        while (enemyIterator.hasNext()) {
-            Enemy enemy = enemyIterator.next();
-            Iterator<Projectile> bulletIterator = projectiles.iterator();
-            boolean enemyHit = false;
-            while (bulletIterator.hasNext()) {
-                Projectile p = bulletIterator.next();
-                if (Circle.isColliding(p, enemy)) { projectilePool.add(p); bulletIterator.remove(); enemyHit = true; break; }
-            }
-            if (enemyHit) {
-                if (enemy.takeDamage()) {
-                    spawnParticles(enemy.positionX(), enemy.positionY(), enemy.getType().getColor());
-                    int bonus = enemy.isBoss() ? BOSS_SCORE_BONUS : KILL_SCORE_BONUS;
-                    addScore(bonus, enemy.positionX(), enemy.positionY());
-                    
-                    if (enemy.getType() == EnemyType.SPLITTER) {
-                        float scrapRadius = (float)(screenHeight * 0.03 * EnemyType.SMALL.getSizeMultiplier());
-                        for (int i = 0; i < 3; i++) {
-                            double angle = i * (2 * Math.PI / 3);
-                            double dist = enemy.getRadius(); // Separation offset
-                            double sx = enemy.positionX() + Math.cos(angle) * dist;
-                            double sy = enemy.positionY() + Math.sin(angle) * dist;
-                            splitEnemies.add(obtainEnemy(EnemyType.SMALL.getColor(), sx, sy, scrapRadius, EnemyType.SMALL));
-                        }
-                    }
-                    
-                    enemyPool.add(enemy);
-                    enemyIterator.remove();
-                    if (enemy.isBoss()) triggerShake(BOSS_SHAKE_DURATION, BOSS_SHAKE_INTENSITY);
-                    else triggerShake(SHAKE_DURATION, SHAKE_INTENSITY * 0.8f);
-                } else triggerShake(2, SHAKE_INTENSITY * 0.3f);
-            }
-        }
-        enemies.addAll(splitEnemies);
-
-        if (player != null) {
-            enemyIterator = enemies.iterator();
-            while (enemyIterator.hasNext()) {
-                Enemy enemy = enemyIterator.next();
-                if (Circle.isColliding(player, enemy)) {
-                    player.takeDamage();
-                    spawnParticles(enemy.positionX(), enemy.positionY(), enemy.getType().getColor());
-                    if (!enemy.isBoss()) { enemyPool.add(enemy); enemyIterator.remove(); }
-                    soundManager.playHit();
-                    damageFlashTimer = DAMAGE_FLASH_DURATION;
-                    triggerShake(BOSS_SHAKE_DURATION, BOSS_SHAKE_INTENSITY);
-                }
-            }
-        }
         Iterator<Particle> partIterator = particles.iterator();
         while (partIterator.hasNext()) {
             Particle p = partIterator.next();
@@ -603,16 +429,12 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
             return;
         }
         pickupTimer++;
-        if (pickupTimer >= PICKUP_SPAWN_INTERVAL) { spawnPickup(); pickupTimer = 0; }
-        if (enemiesToSpawn > 0) {
-            spawnTimer++;
-            int spawnInterval = Math.max(MIN_SPAWN_INTERVAL, INITIAL_SPAWN_INTERVAL - (waveNumber * 5));
-            if (spawnTimer >= spawnInterval) {
-                if (isBossWave) spawnBoss(); else spawnEnemy();
-                enemiesToSpawn--;
-                spawnTimer = 0;
-            }
-        } else if (enemies.isEmpty() && waveBreakTimer == 0 && waveNumber > 0) { waveBreakTimer = WAVE_BREAK_DURATION; }
+        if (pickupTimer >= Constants.PICKUP_SPAWN_INTERVAL) { spawnPickup(); pickupTimer = 0; }
+        
+        if (enemyManager.isWaveCleared() && waveBreakTimer == 0 && waveNumber > 0) { 
+            waveBreakTimer = Constants.WAVE_BREAK_DURATION; 
+        }
+        
         scoreTimer++;
         if (scoreTimer >= (int) GameLoop.MAX_UPS) { addScore(1, -1, -1); scoreTimer = 0; }
     }
@@ -620,7 +442,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
     private void addScore(int amount, double x, double y) {
         score += amount;
         if (amount >= 3) {
-            scorePopTimer = SCORE_POP_DURATION;
+            scorePopTimer = Constants.SCORE_POP_DURATION;
             if (x != -1) floatingTexts.add(new FloatingText("+" + amount, x, y, Color.CYAN, 50));
         }
     }
@@ -636,41 +458,8 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
     private void startNextWave() {
         waveNumber++;
         isBossWave = (waveNumber % 5 == 0);
-        enemiesToSpawn = isBossWave ? 1 : 5 + (waveNumber * 2);
-        waveAnnouncementTimer = WAVE_ANNOUNCEMENT_DURATION;
-        spawnTimer = 0;
-    }
-
-    private EnemyType pickEnemyType() {
-        int roll = random.nextInt(100);
-        if (waveNumber >= 6 && roll < 15) return EnemyType.SPLITTER;
-        if (waveNumber >= 4 && roll < 25) return EnemyType.ZIGZAG;
-        if (waveNumber >= 3 && roll < 35) return EnemyType.TANK;
-        if (waveNumber >= 2 && roll < 50) return EnemyType.FAST;
-        return EnemyType.NORMAL;
-    }
-
-    private void spawnEnemy() {
-        EnemyType type = pickEnemyType();
-        float baseRadius = (float) (screenHeight * 0.03);
-        float enemyRadius = (float) (baseRadius * type.getSizeMultiplier());
-        double x, y;
-        int edge = random.nextInt(4);
-        switch (edge) {
-            case 0: x = random.nextDouble() * screenWidth; y = enemyRadius; break;
-            case 1: x = screenWidth - enemyRadius; y = random.nextDouble() * screenHeight; break;
-            case 2: x = random.nextDouble() * screenWidth; y = screenHeight - enemyRadius; break;
-            default: x = enemyRadius; y = random.nextDouble() * screenHeight; break;
-        }
-        enemies.add(obtainEnemy(type.getColor(), x, y, enemyRadius, type));
-    }
-
-    private void spawnBoss() {
-        EnemyType type = EnemyType.TANK;
-        float bossRadius = (float) ((screenHeight * 0.03) * 2.5);
-        Enemy boss = obtainEnemy(Color.RED, screenWidth / 2.0, bossRadius, bossRadius, type);
-        boss.setAsBoss(10 + (waveNumber / 5) * 5);
-        enemies.add(boss);
+        enemyManager.startNextWave(waveNumber);
+        waveAnnouncementTimer = Constants.WAVE_ANNOUNCEMENT_DURATION;
     }
 
     private void spawnPickup() {
@@ -684,13 +473,8 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         return new Projectile(x, y, radius, dirX, dirY, getContext());
     }
 
-    private Enemy obtainEnemy(int color, double x, double y, float radius, EnemyType type) {
-        if (!enemyPool.isEmpty()) { Enemy e = enemyPool.remove(enemyPool.size() - 1); e.reset(color, x, y, radius, type); return e; }
-        return new Enemy(color, player, x, y, radius, type, getContext());
-    }
-
     private void spawnParticles(double x, double y, int color) {
-        for (int i = 0; i < PARTICLE_COUNT; i++) {
+        for (int i = 0; i < Constants.PARTICLE_COUNT; i++) {
             double angle = random.nextDouble() * 2 * Math.PI;
             float pRadius = 3 + random.nextFloat() * 4;
             Particle p;
