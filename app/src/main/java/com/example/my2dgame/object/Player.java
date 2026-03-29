@@ -11,6 +11,7 @@ import android.graphics.Rect;
 
 import androidx.core.content.ContextCompat;
 
+import com.example.my2dgame.EngineTrail;
 import com.example.my2dgame.Joystick;
 import com.example.my2dgame.PickupType;
 import com.example.my2dgame.R;
@@ -32,6 +33,7 @@ public class Player extends Circle {
     private final Rect dstRect = new Rect();
     private final Paint spritePaint = new Paint();
     private float rotationAngle = 0f;
+    private final EngineTrail engineTrail;
 
     public Player(Context context, Joystick joystick, double positionX, double positionY, float radius) {
         super(ContextCompat.getColor(context, R.color.player), positionX, positionY, radius);
@@ -48,6 +50,8 @@ public class Player extends Circle {
         
         // Apply tint
         spritePaint.setColorFilter(new PorterDuffColorFilter(paint.getColor(), PorterDuff.Mode.SRC_ATOP));
+        
+        engineTrail = new EngineTrail();
     }
 
     public int getHealthPoints() {
@@ -114,9 +118,12 @@ public class Player extends Circle {
 
         // Update rotation based on movement direction
         if (velocityX != 0 || velocityY != 0) {
-            // Reverting to +90 as it was correct before (assuming sprite faces UP)
             rotationAngle = (float) Math.toDegrees(Math.atan2(velocityY, velocityX)) + 90;
+            // Emit trail when moving
+            engineTrail.emit(positionX, positionY, radius, rotationAngle);
         }
+        
+        engineTrail.update();
 
         if (speedBoostTimer > 0) speedBoostTimer--;
         if (rapidFireTimer > 0) rapidFireTimer--;
@@ -125,6 +132,9 @@ public class Player extends Circle {
 
     @Override
     public void draw(Canvas canvas) {
+        // Draw trail behind the ship
+        engineTrail.draw(canvas);
+
         dstRect.set(
             (int) (positionX - radius),
             (int) (positionY - radius),
