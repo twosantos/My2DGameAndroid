@@ -1,6 +1,7 @@
 package com.example.my2dgame;
 
 import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.Paint;
 
 public class Joystick {
@@ -17,6 +18,7 @@ public class Joystick {
     private boolean hasBeenInitialised = false;
     private double actuatorX;
     private double actuatorY;
+    private final int baseInnerColor;
 
     public Joystick(
             int centerPositionX,
@@ -32,6 +34,7 @@ public class Joystick {
         this.innerCircleCenterPositionY = centerPositionY;
         this.outerCircleRadius = outerCircleRadius;
         this.innerCircleRadius = innerCircleRadius;
+        this.baseInnerColor = innerColor;
 
         innerCirclePaint = new Paint();
         innerCirclePaint.setColor(innerColor);
@@ -43,17 +46,24 @@ public class Joystick {
     }
 
     public void draw(Canvas canvas) {
-        // If not pressed and already initialised (used once), don't draw
         if (!pressed && hasBeenInitialised) return;
 
-        // Save original alpha
         int oldOuterAlpha = outerCirclePaint.getAlpha();
         int oldInnerAlpha = innerCirclePaint.getAlpha();
 
-        // If it's just a placeholder (not pressed and not initialised yet), draw faded
         if (!pressed && !hasBeenInitialised) {
             outerCirclePaint.setAlpha(60);
             innerCirclePaint.setAlpha(60);
+        }
+
+        // UX: Interactive Glow - Inner circle changes color/brightness based on distance
+        if (pressed) {
+            double distancePercent = Math.sqrt(actuatorX * actuatorX + actuatorY * actuatorY);
+            if (distancePercent > 0.8) {
+                innerCirclePaint.setColor(Color.WHITE); // Max tilt glow
+            } else {
+                innerCirclePaint.setColor(baseInnerColor);
+            }
         }
 
         canvas.drawCircle(
@@ -70,16 +80,15 @@ public class Joystick {
                 innerCirclePaint
         );
 
-        // Restore alpha
         outerCirclePaint.setAlpha(oldOuterAlpha);
         innerCirclePaint.setAlpha(oldInnerAlpha);
+        innerCirclePaint.setColor(baseInnerColor); // Reset for next frame
     }
 
     public void update() {
         if (isPressed()) {
             updateInnerCirclePosition();
         } else if (!hasBeenInitialised) {
-            // Keep inner circle at center for placeholder
             innerCircleCenterPositionX = outerCircleCenterPositionX;
             innerCircleCenterPositionY = outerCircleCenterPositionY;
         }
