@@ -35,10 +35,6 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
     private int aimPointerId = -1;
     private Player player;
     
-    private final List<Projectile> projectiles = new ArrayList<>();
-    private final List<Projectile> projectilePool = new ArrayList<>();
-    private final List<Particle> particles = new ArrayList<>();
-    private final List<Particle> particlePool = new ArrayList<>();
     private final List<Pickup> pickups = new ArrayList<>();
     private final List<FloatingText> floatingTexts = new ArrayList<>();
     
@@ -59,12 +55,13 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
     private float currentShakeIntensity = Constants.SHAKE_INTENSITY;
     private int currentShakeDuration = Constants.SHAKE_DURATION;
 
-    // UI Feedback State
     private int scorePopTimer = 0;
 
-    // UI Components
+    // Modular Managers
     private UIManager uiManager;
     private EnemyManager enemyManager;
+    private ProjectileManager projectileManager;
+    private ParticleManager particleManager;
     private List<ParallaxLayer> parallaxLayers;
 
     // Wave system state
@@ -81,6 +78,9 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         surfaceHolder.addCallback(this);
 
         uiManager = new UIManager(context);
+        projectileManager = new ProjectileManager(context);
+        particleManager = new ParticleManager(context);
+        
         soundManager = new SoundManager(context);
         soundManager.startMusic();
 
@@ -98,7 +98,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
     }
 
     public void onEnemyDestroyed(Enemy enemy) {
-        spawnParticles(enemy.positionX(), enemy.positionY(), enemy.getType().getColor());
+        particleManager.spawnExplosion(enemy.positionX(), enemy.positionY(), enemy.getType().getColor());
         int bonus = enemy.isBoss() ? Constants.BOSS_SCORE_BONUS : Constants.KILL_SCORE_BONUS;
         addScore(bonus, enemy.positionX(), enemy.positionY());
         if (enemy.isBoss()) triggerShake(Constants.BOSS_SHAKE_DURATION, Constants.BOSS_SHAKE_INTENSITY);
@@ -111,7 +111,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
 
     public void onPlayerHit(Enemy enemy) {
         player.takeDamage();
-        spawnParticles(enemy.positionX(), enemy.positionY(), enemy.getType().getColor());
+        particleManager.spawnExplosion(enemy.positionX(), enemy.positionY(), enemy.getType().getColor());
         soundManager.playHit();
         damageFlashTimer = Constants.DAMAGE_FLASH_DURATION;
         triggerShake(Constants.BOSS_SHAKE_DURATION, Constants.BOSS_SHAKE_INTENSITY);
@@ -258,11 +258,10 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
 
     private void startGame() {
         player.reset(screenWidth / 2.0, screenHeight + 200);
-        if (enemyManager != null) enemyManager.reset();
-        projectilePool.addAll(projectiles);
-        particlePool.addAll(particles);
-        projectiles.clear();
-        particles.clear();
+        player.startFlyIn(screenWidth / 2.0, screenHeight / 2.0);
+        enemyManager.reset();
+        projectileManager.reset();
+        particleManager.reset();
         pickups.clear();
         floatingTexts.clear();
         score = 0;
@@ -271,7 +270,6 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         pickupTimer = 0;
         shakeTimer = 0;
         
-        // Start first wave immediately with animation
         waveNumber = startingWave;
         triggerNextWaveAnnouncement();
         
@@ -348,8 +346,8 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         if (parallaxLayers != null) { for (ParallaxLayer layer : parallaxLayers) layer.draw(canvas); }
         if (player != null) player.draw(canvas);
         enemyManager.draw(canvas);
-        for (Projectile projectile : projectiles) projectile.draw(canvas);
-        for (Particle particle : particles) particle.draw(canvas);
+        projectileManager.draw(canvas);
+        particleManager.draw(canvas);
         for (Pickup pickup : pickups) pickup.draw(canvas);
         for (FloatingText ft : floatingTexts) ft.draw(canvas);
         if (joystick != null) joystick.draw(canvas);
@@ -379,7 +377,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
             player.clampToScreen(screenWidth, screenHeight);
         }
         
-        // Weapon Firing Logic
+        // Firing Logic
         if (aimJoystick != null && player != null && !player.isAnimating()) {
             double ax = aimJoystick.actuatorX();
             double ay = aimJoystick.actuatorY();
@@ -388,20 +386,14 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
                 int interval = player.hasRapidFire() ? Constants.RAPID_FIRE_INTERVAL : Constants.FIRE_INTERVAL;
                 if (fireTimer >= interval) {
                     double mag = Math.sqrt(ax * ax + ay * ay);
-                    projectiles.add(obtainProjectile(player.positionX(), player.positionY(), (float) (screenHeight * 0.01), ax / mag, ay / mag));
+                    projectileManager.fire(player.positionX(), player.positionY(), (float) (screenHeight * 0.01), ax / mag, ay / mag, player, enemyManager);
                     fireTimer = 0;
                 }
             } else fireTimer = 0;
         }
         
-        Iterator<Projectile> projIterator = projectiles.iterator();
-        while (projIterator.hasNext()) {
-            Projectile p = projIterator.next();
-            p.update(dt);
-            if (p.isOffScreen(screenWidth, screenHeight)) { projectilePool.add(p); projIterator.remove(); }
-        }
-        
-        enemyManager.update(dt, screenWidth, screenHeight, projectiles, projectilePool, this);
+        projectileManager.update(dt, screenWidth, screenHeight);
+        enemyManager.update(dt, screenWidth, screenHeight, projectileManager.getProjectiles(), projectileManager.getPool(), this);
 
         Iterator<Pickup> pickupIterator = pickups.iterator();
         while (pickupIterator.hasNext()) {
@@ -414,12 +406,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
             } else if (p.isExpired()) pickupIterator.remove();
         }
         
-        Iterator<Particle> partIterator = particles.iterator();
-        while (partIterator.hasNext()) {
-            Particle p = partIterator.next();
-            p.update(dt);
-            if (p.isDead()) { particlePool.add(p); partIterator.remove(); }
-        }
+        particleManager.update(dt);
         Iterator<FloatingText> ftIterator = floatingTexts.iterator();
         while (ftIterator.hasNext()) { if (ftIterator.next().update(dt)) ftIterator.remove(); }
 
@@ -475,44 +462,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         pickups.add(new Pickup(type, radius + random.nextDouble() * (screenWidth - 2 * radius), radius + random.nextDouble() * (screenHeight - 2 * radius), radius));
     }
 
-    private Projectile obtainProjectile(double x, double y, float radius, double dirX, double dirY) {
-        Projectile p;
-        if (!projectilePool.isEmpty()) {
-            p = projectilePool.remove(projectilePool.size() - 1);
-            p.reset(x, y, radius, dirX, dirY);
-        } else {
-            p = new Projectile(x, y, radius, dirX, dirY, getContext());
-        }
-        
-        if (player != null && player.hasHoming()) {
-            Enemy closest = findNearestEnemy(x, y);
-            if (closest != null) p.setHoming(closest);
-        }
-        
-        return p;
-    }
-
-    private Enemy findNearestEnemy(double x, double y) {
-        Enemy closest = null;
-        double minDist = Double.MAX_VALUE;
-        for (Enemy e : enemyManager.getEnemies()) {
-            double dx = e.positionX() - x;
-            double dy = e.positionY() - y;
-            double dist = dx*dx + dy*dy;
-            if (dist < minDist) { minDist = dist; closest = e; }
-        }
-        return closest;
-    }
-
     private void spawnParticles(double x, double y, int color) {
-        for (int i = 0; i < Constants.PARTICLE_COUNT; i++) {
-            double angle = random.nextDouble() * 2 * Math.PI;
-            float pRadius = 3 + random.nextFloat() * 4;
-            Particle p;
-            if (!particlePool.isEmpty()) p = particlePool.remove(particlePool.size() - 1);
-            else p = new Particle();
-            p.init(x, y, pRadius, color, Math.cos(angle), Math.sin(angle), getContext());
-            particles.add(p);
-        }
+        particleManager.spawnExplosion(x, y, color);
     }
 }
