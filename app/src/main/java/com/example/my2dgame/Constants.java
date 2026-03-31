@@ -1,8 +1,10 @@
 package com.example.my2dgame;
 
 public class Constants {
-    public static final int INITIAL_SPAWN_INTERVAL = 90;
-    public static final int MIN_SPAWN_INTERVAL = 20;
+    // Increased difficulty: Spawn faster and reach a lower floor
+    public static final int INITIAL_SPAWN_INTERVAL = 60; // 2 seconds (down from 80 ticks)
+    public static final int MIN_SPAWN_INTERVAL = 10;    // 0.33 seconds (down from 20 ticks)
+
     public static final int FIRE_INTERVAL = 10;
     public static final int RAPID_FIRE_INTERVAL = 4;
     public static final int DAMAGE_FLASH_DURATION = 6;
@@ -15,7 +17,7 @@ public class Constants {
     public static final int BOSS_SHAKE_DURATION = 12;
     public static final float SHAKE_INTENSITY = 12f;
     public static final float BOSS_SHAKE_INTENSITY = 35f;
-    public static final int PICKUP_SPAWN_INTERVAL = 50;
+    public static final int PICKUP_SPAWN_INTERVAL = 350;
     
     public static final int WAVE_BREAK_DURATION = 90;
     public static final int WAVE_ANNOUNCEMENT_DURATION = 90;
