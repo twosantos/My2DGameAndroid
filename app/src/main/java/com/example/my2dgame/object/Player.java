@@ -52,9 +52,9 @@ public class Player extends Circle {
         shieldPaint.setStyle(Paint.Style.STROKE);
         shieldPaint.setStrokeWidth(10);
 
-        sprite = SpriteCache.getSprite(context, R.drawable.spaceship);
-        spritePaint.setColorFilter(new PorterDuffColorFilter(paint.getColor(), PorterDuff.Mode.SRC_ATOP));
-        engineTrail = new EngineTrail();
+        sprite = SpriteCache.getSprite(context, R.drawable.tank);
+        //spritePaint.setColorFilter(new PorterDuffColorFilter(paint.getColor(), PorterDuff.Mode.SRC_ATOP));
+        engineTrail = new EngineTrail(30, 0.4f);
     }
 
     public int getHealthPoints() { return healthPoints; }

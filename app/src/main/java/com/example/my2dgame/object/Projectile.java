@@ -8,6 +8,7 @@ import android.graphics.Paint;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffColorFilter;
 import android.graphics.Rect;
+import com.example.my2dgame.EngineTrail;
 import com.example.my2dgame.R;
 import com.example.my2dgame.SpriteCache;
 
@@ -23,14 +24,16 @@ public class Projectile extends Circle {
     private float rotationAngle = 0f;
     private Enemy target = null;
     private boolean isHoming = false;
+    private final EngineTrail engineTrail;
 
     public Projectile(double positionX, double positionY, float radius, double directionX, double directionY, Context context) {
-        super(Color.CYAN, positionX, positionY, radius);
+        super(Color.WHITE, positionX, positionY, radius);
         velocityX = directionX * SPEED_PPS;
         velocityY = directionY * SPEED_PPS;
         
         sprite = SpriteCache.getSprite(context, R.drawable.rocket);
-        spritePaint.setColorFilter(new PorterDuffColorFilter(Color.CYAN, PorterDuff.Mode.SRC_ATOP));
+        spritePaint.setColorFilter(new PorterDuffColorFilter(Color.WHITE, PorterDuff.Mode.SRC_ATOP));
+        engineTrail = new EngineTrail(15, 0.4f);
         updateRotation();
     }
 
@@ -42,7 +45,8 @@ public class Projectile extends Circle {
         this.velocityY = directionY * SPEED_PPS;
         this.target = null;
         this.isHoming = false;
-        spritePaint.setColorFilter(new PorterDuffColorFilter(Color.CYAN, PorterDuff.Mode.SRC_ATOP));
+        spritePaint.setColorFilter(new PorterDuffColorFilter(Color.WHITE, PorterDuff.Mode.SRC_ATOP));
+        engineTrail.reset();
         updateRotation();
     }
 
@@ -61,7 +65,6 @@ public class Projectile extends Circle {
     @Override
     public void update(double dt) {
         if (isHoming && target != null) {
-            // FIX: Use isDead() instead of takeDamage() to avoid dealing damage while just tracking
             if (target.isDead()) {
                 target = null;
             }
@@ -80,10 +83,15 @@ public class Projectile extends Circle {
 
         positionX += velocityX * dt;
         positionY += velocityY * dt;
+
+        engineTrail.emit(positionX, positionY, radius, rotationAngle);
+        engineTrail.update();
     }
 
     @Override
     public void draw(Canvas canvas) {
+        engineTrail.draw(canvas);
+
         dstRect.set(
             (int) (positionX - radius),
             (int) (positionY - radius),

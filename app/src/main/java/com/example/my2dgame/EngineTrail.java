@@ -8,13 +8,15 @@ import java.util.Iterator;
 import java.util.List;
 
 /**
- * Manages a trail of particles emitted from the back of the spaceship.
+ * Manages a trail of particles emitted from the back of an entity.
  */
 public class EngineTrail {
     private final List<TrailParticle> particles = new ArrayList<>();
     private final List<TrailParticle> pool = new ArrayList<>();
     private final Paint paint = new Paint();
-    private static final int MAX_PARTICLES = 50;
+    private final int maxParticles;
+    private final int color;
+    private final float sizeMultiplier;
 
     private static class TrailParticle {
         float x, y, radius;
@@ -34,28 +36,29 @@ public class EngineTrail {
         }
     }
 
-    public EngineTrail() {
-        paint.setColor(Color.CYAN); // Classic engine glow color
+    public EngineTrail(int maxParticles, float sizeMultiplier) {
+        this.color = Color.RED;
+        this.maxParticles = maxParticles;
+        this.sizeMultiplier = sizeMultiplier;
+        paint.setColor(color);
         paint.setStyle(Paint.Style.FILL);
     }
 
-    public void emit(double px, double py, float shipRadius, float angleDegrees) {
-        // Calculate the back of the ship
-        // angleDegrees is where the ship faces. The back is opposite.
-        double angleRad = Math.toRadians(angleDegrees - 90); // -90 because our "Up" was +90
-        float ox = (float) (px - Math.cos(angleRad) * shipRadius * 0.8f);
-        float oy = (float) (py - Math.sin(angleRad) * shipRadius * 0.8f);
+    public void emit(double px, double py, float entityRadius, float angleDegrees) {
+        double angleRad = Math.toRadians(angleDegrees - 90);
+        float ox = (float) (px - Math.cos(angleRad) * entityRadius * 0.8f);
+        float oy = (float) (py - Math.sin(angleRad) * entityRadius * 0.8f);
 
         TrailParticle p;
         if (!pool.isEmpty()) {
             p = pool.remove(pool.size() - 1);
-        } else if (particles.size() < MAX_PARTICLES) {
+        } else if (particles.size() < maxParticles) {
             p = new TrailParticle();
         } else {
             return;
         }
         
-        p.init(ox, oy, shipRadius * 0.4f);
+        p.init(ox, oy, entityRadius * sizeMultiplier);
         particles.add(p);
     }
 
@@ -75,5 +78,10 @@ public class EngineTrail {
             paint.setAlpha(p.alpha);
             canvas.drawCircle(p.x, p.y, p.radius, paint);
         }
+    }
+
+    public void reset() {
+        pool.addAll(particles);
+        particles.clear();
     }
 }
