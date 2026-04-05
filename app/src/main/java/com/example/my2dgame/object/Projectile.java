@@ -11,6 +11,8 @@ import android.graphics.Rect;
 import com.example.my2dgame.EngineTrail;
 import com.example.my2dgame.R;
 import com.example.my2dgame.SpriteCache;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * Projectile fired by the player. Travels in a straight line at fixed velocity.
@@ -24,6 +26,8 @@ public class Projectile extends Circle {
     private float rotationAngle = 0f;
     private Enemy target = null;
     private boolean isHoming = false;
+    private boolean isPiercing = false;
+    private final Set<Integer> hitEnemies = new HashSet<>();
     private final EngineTrail engineTrail;
 
     public Projectile(double positionX, double positionY, float radius, double directionX, double directionY, Context context) {
@@ -45,6 +49,8 @@ public class Projectile extends Circle {
         this.velocityY = directionY * SPEED_PPS;
         this.target = null;
         this.isHoming = false;
+        this.isPiercing = false;
+        this.hitEnemies.clear();
         spritePaint.setColorFilter(new PorterDuffColorFilter(Color.WHITE, PorterDuff.Mode.SRC_ATOP));
         engineTrail.reset();
         updateRotation();
@@ -54,6 +60,25 @@ public class Projectile extends Circle {
         this.isHoming = true;
         this.target = target;
         spritePaint.setColorFilter(new PorterDuffColorFilter(Color.rgb(255, 100, 0), PorterDuff.Mode.SRC_ATOP));
+    }
+
+    public void setPiercing(boolean piercing) {
+        this.isPiercing = piercing;
+        if (piercing) {
+            spritePaint.setColorFilter(new PorterDuffColorFilter(Color.MAGENTA, PorterDuff.Mode.SRC_ATOP));
+        }
+    }
+
+    public boolean isPiercing() {
+        return isPiercing;
+    }
+
+    public boolean hasHitEnemy(Enemy enemy) {
+        return hitEnemies.contains(enemy.hashCode());
+    }
+
+    public void registerHit(Enemy enemy) {
+        hitEnemies.add(enemy.hashCode());
     }
 
     private void updateRotation() {

@@ -31,7 +31,6 @@ public class EnemyManager {
     }
 
     public void update(double dt, int screenWidth, int screenHeight, List<Projectile> projectiles, List<Projectile> projectilePool, Game game) {
-        // Structured Enemy spawning
         if (enemiesToSpawn > 0) {
             spawnTimer++;
             int spawnInterval = Math.max(Constants.MIN_SPAWN_INTERVAL, Constants.INITIAL_SPAWN_INTERVAL - (waveNumber * 5));
@@ -48,21 +47,26 @@ public class EnemyManager {
             enemy.clampToScreen(screenWidth, screenHeight);
         }
 
-        // Collision logic
         splitEnemies.clear();
         Iterator<Enemy> enemyIterator = enemies.iterator();
         while (enemyIterator.hasNext()) {
             Enemy enemy = enemyIterator.next();
             
-            // Bullet collisions
             Iterator<Projectile> bulletIterator = projectiles.iterator();
             boolean enemyHit = false;
             while (bulletIterator.hasNext()) {
                 Projectile p = bulletIterator.next();
                 if (Circle.isColliding(p, enemy)) {
-                    projectilePool.add(p);
-                    bulletIterator.remove();
-                    enemyHit = true;
+                    if (p.isPiercing()) {
+                        if (!p.hasHitEnemy(enemy)) {
+                            p.registerHit(enemy);
+                            enemyHit = true;
+                        }
+                    } else {
+                        projectilePool.add(p);
+                        bulletIterator.remove();
+                        enemyHit = true;
+                    }
                     break;
                 }
             }
@@ -90,7 +94,6 @@ public class EnemyManager {
                 }
             }
 
-            // Player collision
             if (player != null && Circle.isColliding(player, enemy)) {
                 game.onPlayerHit(enemy);
                 if (!enemy.isBoss()) {
@@ -160,7 +163,8 @@ public class EnemyManager {
 
     private EnemyType pickEnemyType() {
         int roll = random.nextInt(100);
-        if (waveNumber >= 6 && roll < 15) return EnemyType.SPLITTER;
+        // SPLITTER available from Wave 1 as requested
+        if (roll < 10) return EnemyType.SPLITTER;
         if (waveNumber >= 4 && roll < 25) return EnemyType.ZIGZAG;
         if (waveNumber >= 3 && roll < 35) return EnemyType.TANK;
         if (waveNumber >= 2 && roll < 50) return EnemyType.FAST;

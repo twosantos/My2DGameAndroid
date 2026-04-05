@@ -2,7 +2,6 @@ package com.example.my2dgame;
 
 import android.app.Activity;
 import android.content.Context;
-import android.content.SharedPreferences;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.view.MotionEvent;
@@ -27,7 +26,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
     private GameLoop gameLoop;
     private final Random random = new Random();
     private final SoundManager soundManager;
-    private final SharedPreferences prefs;
+    private final SaveManager saveManager;
 
     private Joystick joystick;
     private Joystick aimJoystick;
@@ -47,7 +46,6 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
     private int damageFlashTimer = 0;
     private int fireTimer = 0;
     private int pickupTimer = 0;
-    private int highScore;
     private boolean isNewHighScore = false;
     private long gameOverTimestamp = 0;
     private static final long GAME_OVER_COOLDOWN_MS = 1000;
@@ -62,6 +60,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
     private EnemyManager enemyManager;
     private ProjectileManager projectileManager;
     private ParticleManager particleManager;
+    private ScrapManager scrapManager;
     private List<ParallaxLayer> parallaxLayers;
 
     // Wave system state
@@ -71,21 +70,27 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
     private int waveAnnouncementTimer = 0;
     private boolean isBossWave = false;
 
+    // Ship Class Logic
+    private ShipProfile selectedProfile = ShipProfile.TECH;
+
     public Game(Context context) {
         super(context);
 
         SurfaceHolder surfaceHolder = getHolder();
         surfaceHolder.addCallback(this);
 
+        saveManager = new SaveManager(context);
         uiManager = new UIManager(context);
         projectileManager = new ProjectileManager(context);
         particleManager = new ParticleManager(context);
+        scrapManager = new ScrapManager();
         
         soundManager = new SoundManager(context);
         soundManager.startMusic();
 
-        prefs = context.getSharedPreferences("my2dgame", Context.MODE_PRIVATE);
-        highScore = prefs.getInt("high_score", 0);
+        // Load persisted ship selection
+        int shipIndex = saveManager.getSelectedShipIndex();
+        selectedProfile = ShipProfile.values()[shipIndex];
 
         SpriteCache.preload(context,
             R.drawable.spaceship,
@@ -99,9 +104,14 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
 
     public void onEnemyDestroyed(Enemy enemy) {
         particleManager.spawnExplosion(enemy.positionX(), enemy.positionY(), enemy.getType().getColor());
+        scrapManager.onEnemyDestroyed(enemy);
+        
         int bonus = enemy.isBoss() ? Constants.BOSS_SCORE_BONUS : Constants.KILL_SCORE_BONUS;
         addScore(bonus, enemy.positionX(), enemy.positionY());
-        if (enemy.isBoss()) triggerShake(Constants.BOSS_SHAKE_DURATION, Constants.BOSS_SHAKE_INTENSITY);
+        if (enemy.isBoss()) {
+            triggerShake(Constants.BOSS_SHAKE_DURATION, Constants.BOSS_SHAKE_INTENSITY);
+            saveManager.setBossDefeated(0);
+        }
         else triggerShake(Constants.SHAKE_DURATION, Constants.SHAKE_INTENSITY * 0.8f);
     }
 
@@ -115,6 +125,11 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         soundManager.playHit();
         damageFlashTimer = Constants.DAMAGE_FLASH_DURATION;
         triggerShake(Constants.BOSS_SHAKE_DURATION, Constants.BOSS_SHAKE_INTENSITY);
+    }
+
+    public void onScrapCollected(int amount) {
+        saveManager.addScrap(amount);
+        floatingTexts.add(new FloatingText("SCRAP +"+amount, player.positionX(), player.positionY(), Color.GREEN, 35));
     }
 
     public void pause() {
@@ -143,9 +158,12 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
             case MENU:
                 if (handleMenuTouch(x, y)) return true;
                 break;
+            case HANGAR:
+                if (handleHangarTouch(x, y)) return true;
+                break;
             case GAME_OVER:
                 if (System.currentTimeMillis() - gameOverTimestamp >= GAME_OVER_COOLDOWN_MS) {
-                    startGame();
+                    gameState = GameState.MENU;
                 }
                 return true;
             case PAUSED:
@@ -159,25 +177,83 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
     }
 
     private boolean handleMenuTouch(float x, float y) {
-        float centerY = screenHeight / 2f + 250;
+        float centerY = screenHeight / 2f;
         float centerX = screenWidth / 2f;
-        if (x > centerX - 150 && x < centerX - 50 && y > centerY - 50 && y < centerY + 50) {
-            startingWave = Math.max(1, startingWave - 1);
+        
+        if (y > centerY - 50 && y < centerY + 150) {
+            int shipCount = ShipProfile.values().length;
+            int currentIndex = selectedProfile.ordinal();
+            if (x < centerX - 100) {
+                currentIndex = (currentIndex - 1 + shipCount) % shipCount;
+                selectedProfile = ShipProfile.values()[currentIndex];
+                saveManager.setSelectedShipIndex(currentIndex);
+                return true;
+            } else if (x > centerX + 100) {
+                currentIndex = (currentIndex + 1) % shipCount;
+                selectedProfile = ShipProfile.values()[currentIndex];
+                saveManager.setSelectedShipIndex(currentIndex);
+                return true;
+            }
+            
+            if (!selectedProfile.isOwned(saveManager) && selectedProfile.isUnlocked(saveManager)) {
+                if (saveManager.spendScrap(selectedProfile.getScrapPrice())) {
+                    saveManager.setShipOwned(selectedProfile.ordinal());
+                    soundManager.playStart();
+                    return true;
+                }
+            }
+        }
+
+        if (x > centerX - 150 && x < centerX + 150 && y > screenHeight - 250 && y < screenHeight - 150) {
+            gameState = GameState.HANGAR;
             return true;
         }
-        if (x > centerX + 50 && x < centerX + 150 && y > centerY - 50 && y < centerY + 50) {
-            startingWave = Math.min(20, startingWave + 1);
-            return true;
-        }
+
         if (x > screenWidth - 250 && y > screenHeight - 150) {
             exitGame();
             return true;
         }
-        if (y < screenHeight - 200) {
+        
+        if (y < screenHeight - 300 && selectedProfile.isOwned(saveManager)) {
             startGame();
             return true;
         }
         return false;
+    }
+
+    private boolean handleHangarTouch(float x, float y) {
+        float startX = screenWidth * 0.1f;
+        float startY = screenHeight * 0.3f;
+        float spacingY = screenHeight * 0.12f;
+        float buyButtonX = screenWidth * 0.7f;
+
+        if (x > buyButtonX && x < buyButtonX + screenWidth * 0.2f) {
+            if (y > startY - 40 && y < startY + 40) tryUpgrade(SaveManager.UPGRADE_HULL);
+            else if (y > startY + spacingY - 40 && y < startY + spacingY + 40) tryUpgrade(SaveManager.UPGRADE_SPEED);
+            else if (y > startY + spacingY * 2 - 40 && y < startY + spacingY * 2 + 40) tryUpgrade(SaveManager.UPGRADE_FIRE);
+            else if (y > startY + spacingY * 3 - 40 && y < startY + spacingY * 3 + 40) tryUpgrade(SaveManager.UPGRADE_MAGNET);
+            else if (y > startY + spacingY * 4 - 40 && y < startY + spacingY * 4 + 40) tryUpgrade(SaveManager.UPGRADE_BATTERY);
+            return true;
+        }
+
+        if (x > screenWidth * 0.05f && x < screenWidth * 0.2f && y > screenHeight - 150 && y < screenHeight - 50) {
+            gameState = GameState.MENU;
+            return true;
+        }
+
+        return false;
+    }
+
+    private void tryUpgrade(String key) {
+        int level = saveManager.getUpgradeLevel(key);
+        if (level < 5) {
+            int[] costs = {50, 150, 450, 1200, 3000};
+            int cost = costs[level];
+            if (saveManager.spendScrap(cost)) {
+                saveManager.incrementUpgrade(key);
+                soundManager.playStart();
+            }
+        }
     }
 
     private boolean handlePauseTouch(float x, float y) {
@@ -250,18 +326,22 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
     }
 
     private boolean isTouchOnPauseButton(float x, float y) {
-        float btnX = screenWidth - Constants.PAUSE_BUTTON_SIZE - Constants.PAUSE_BUTTON_MARGIN;
-        float btnY = Constants.PAUSE_BUTTON_MARGIN;
-        return x >= btnX && x <= btnX + Constants.PAUSE_BUTTON_SIZE
-                && y >= btnY && y <= btnY + Constants.PAUSE_BUTTON_SIZE;
+        float btnSize = Constants.PAUSE_BUTTON_SIZE;
+        float margin = Constants.PAUSE_BUTTON_MARGIN;
+        float btnX = screenWidth - btnSize - margin;
+        float btnY = margin;
+        return x >= btnX && x <= btnX + btnSize
+                && y >= btnY && y <= btnY + btnSize;
     }
 
     private void startGame() {
+        player.initFromProfile(selectedProfile, saveManager);
         player.reset(screenWidth / 2.0, screenHeight + 200);
         player.startFlyIn(screenWidth / 2.0, screenHeight / 2.0);
-        enemyManager.reset();
+        if (enemyManager != null) enemyManager.reset();
         projectileManager.reset();
         particleManager.reset();
+        scrapManager.reset();
         pickups.clear();
         floatingTexts.clear();
         score = 0;
@@ -299,7 +379,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
             aimJoystick = new Joystick((int) (screenWidth * 0.88), (int) (screenHeight * 0.75), (int) (screenHeight * 0.08), (int) (screenHeight * 0.045), Color.RED, Color.DKGRAY);
         }
         if (player == null) {
-            player = new Player(getContext(), joystick, screenWidth / 2.0, screenHeight / 2.0, (float) (screenHeight * 0.035));
+            player = new Player(getContext(), saveManager, selectedProfile, joystick, screenWidth / 2.0, screenHeight / 2.0, (float) (screenHeight * 0.035));
         }
         if (enemyManager == null) {
             enemyManager = new EnemyManager(getContext(), player);
@@ -327,10 +407,11 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         super.draw(canvas);
         if (canvas == null) return;
         switch (gameState) {
-            case MENU: uiManager.drawMenu(canvas, screenWidth, screenHeight, parallaxLayers, highScore, startingWave); break;
+            case MENU: uiManager.drawMenu(canvas, screenWidth, screenHeight, parallaxLayers, saveManager.getHighScore(), startingWave, selectedProfile, saveManager); break;
+            case HANGAR: uiManager.drawHangar(canvas, screenWidth, screenHeight, saveManager); break;
             case PLAYING: drawPlaying(canvas); break;
             case PAUSED: drawPlaying(canvas); uiManager.drawPauseOverlay(canvas, screenWidth, screenHeight); break;
-            case GAME_OVER: uiManager.drawGameOver(canvas, screenWidth, screenHeight, score, highScore, isNewHighScore); break;
+            case GAME_OVER: uiManager.drawGameOver(canvas, screenWidth, screenHeight, score, saveManager.getHighScore(), isNewHighScore); break;
         }
     }
 
@@ -348,6 +429,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         enemyManager.draw(canvas);
         projectileManager.draw(canvas);
         particleManager.draw(canvas);
+        scrapManager.draw(canvas);
         for (Pickup pickup : pickups) pickup.draw(canvas);
         for (FloatingText ft : floatingTexts) ft.draw(canvas);
         if (joystick != null) joystick.draw(canvas);
@@ -377,13 +459,12 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
             player.clampToScreen(screenWidth, screenHeight);
         }
         
-        // Firing Logic
         if (aimJoystick != null && player != null && !player.isAnimating()) {
             double ax = aimJoystick.actuatorX();
             double ay = aimJoystick.actuatorY();
             if (ax != 0 || ay != 0) {
                 fireTimer++;
-                int interval = player.hasRapidFire() ? Constants.RAPID_FIRE_INTERVAL : Constants.FIRE_INTERVAL;
+                int interval = player.getFireInterval();
                 if (fireTimer >= interval) {
                     double mag = Math.sqrt(ax * ax + ay * ay);
                     projectileManager.fire(player.positionX(), player.positionY(), (float) (screenHeight * 0.01), ax / mag, ay / mag, player, enemyManager);
@@ -407,13 +488,16 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         }
         
         particleManager.update(dt);
+        scrapManager.update(dt, player, this);
         Iterator<FloatingText> ftIterator = floatingTexts.iterator();
         while (ftIterator.hasNext()) { if (ftIterator.next().update(dt)) ftIterator.remove(); }
 
         if (player != null && !player.isAlive()) {
             gameState = GameState.GAME_OVER;
             gameOverTimestamp = System.currentTimeMillis();
-            if (score > highScore) { highScore = score; prefs.edit().putInt("high_score", highScore).apply(); }
+            isNewHighScore = saveManager.trySaveHighScore(score);
+            saveManager.updateMaxWave(waveNumber);
+            saveManager.addScrap(waveNumber * 5);
             soundManager.playGameOver();
             return;
         }
@@ -422,6 +506,11 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         
         if (enemyManager.isWaveCleared() && waveBreakTimer == 0 && waveNumber > 0) { 
             waveNumber++;
+            if (saveManager.updateMaxWave(waveNumber)) {
+                if (waveNumber == 10 || waveNumber == 20 || waveNumber == 30) {
+                    floatingTexts.add(new FloatingText("MILESTONE REACHED: WAVE " + waveNumber, screenWidth/2.0, screenHeight/2.0, Color.CYAN, 60));
+                }
+            }
             triggerNextWaveAnnouncement();
         }
         
@@ -457,12 +546,13 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
     }
 
     private void spawnPickup() {
-        PickupType type = PickupType.values()[random.nextInt(PickupType.values().length)];
+        PickupType[] types = PickupType.values();
+        PickupType type;
+        do {
+            type = types[random.nextInt(types.length)];
+        } while (type == PickupType.HOMING && !saveManager.isBossDefeated(0));
+
         float radius = 25;
         pickups.add(new Pickup(type, radius + random.nextDouble() * (screenWidth - 2 * radius), radius + random.nextDouble() * (screenHeight - 2 * radius), radius));
-    }
-
-    private void spawnParticles(double x, double y, int color) {
-        particleManager.spawnExplosion(x, y, color);
     }
 }

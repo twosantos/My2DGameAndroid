@@ -22,6 +22,20 @@ public class ProjectileManager {
     }
 
     public void fire(double x, double y, float radius, double dirX, double dirY, Player player, EnemyManager enemyManager) {
+        if (player.getProfile() == ShipProfile.AEGIS) {
+            // Aegis Trait: Double-Shot (two parallel projectiles)
+            double perpX = -dirY;
+            double perpY = dirX;
+            double offset = player.getRadius() * 0.6;
+
+            createProjectile(x + perpX * offset, y + perpY * offset, radius, dirX, dirY, player, enemyManager);
+            createProjectile(x - perpX * offset, y - perpY * offset, radius, dirX, dirY, player, enemyManager);
+        } else {
+            createProjectile(x, y, radius, dirX, dirY, player, enemyManager);
+        }
+    }
+
+    private void createProjectile(double x, double y, float radius, double dirX, double dirY, Player player, EnemyManager enemyManager) {
         Projectile p;
         if (!pool.isEmpty()) {
             p = pool.remove(pool.size() - 1);
@@ -36,6 +50,10 @@ public class ProjectileManager {
                 p.setHoming(closest);
             }
         }
+        
+        // Ghost Trait: Piercing
+        p.setPiercing(player.getProfile() == ShipProfile.GHOST);
+
         projectiles.add(p);
     }
 

@@ -40,11 +40,16 @@ public class EngineTrail {
         this.color = Color.RED;
         this.maxParticles = maxParticles;
         this.sizeMultiplier = sizeMultiplier;
-        paint.setColor(color);
+        paint.setColor(Color.RED);
         paint.setStyle(Paint.Style.FILL);
     }
 
     public void emit(double px, double py, float entityRadius, float angleDegrees) {
+        // angleDegrees is where the entity faces. The back is opposite.
+        // For Player (+90 offset): back is angleDegrees - 90
+        // For Projectile (-45 offset): we need to calculate based on the specific asset orientation
+        // However, generic logic: back is angleDegrees + 180 (relative to facing)
+        // Adjusting back based on the ship orientation (+90):
         double angleRad = Math.toRadians(angleDegrees - 90);
         float ox = (float) (px - Math.cos(angleRad) * entityRadius * 0.8f);
         float oy = (float) (py - Math.sin(angleRad) * entityRadius * 0.8f);
