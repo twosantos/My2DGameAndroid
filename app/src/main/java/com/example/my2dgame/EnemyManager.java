@@ -5,6 +5,7 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import com.example.my2dgame.object.Circle;
 import com.example.my2dgame.object.Enemy;
+import com.example.my2dgame.object.EnemyProjectile;
 import com.example.my2dgame.object.Player;
 import com.example.my2dgame.object.Projectile;
 import java.util.ArrayList;
@@ -16,6 +17,11 @@ public class EnemyManager {
     private final List<Enemy> enemies = new ArrayList<>();
     private final List<Enemy> enemyPool = new ArrayList<>();
     private final List<Enemy> splitEnemies = new ArrayList<>();
+    
+    // Enemy Projectile Management
+    private static final List<EnemyProjectile> enemyProjectiles = new ArrayList<>();
+    private static final List<EnemyProjectile> enemyProjectilePool = new ArrayList<>();
+    
     private final Random random = new Random();
     private final Context context;
     private final Player player;
@@ -28,6 +34,17 @@ public class EnemyManager {
     public EnemyManager(Context context, Player player) {
         this.context = context;
         this.player = player;
+    }
+
+    public static void spawnEnemyProjectile(double x, double y, double dirX, double dirY, Context context) {
+        EnemyProjectile p;
+        if (!enemyProjectilePool.isEmpty()) {
+            p = enemyProjectilePool.remove(enemyProjectilePool.size() - 1);
+            p.init(x, y, dirX, dirY);
+        } else {
+            p = new EnemyProjectile(x, y, dirX, dirY);
+        }
+        enemyProjectiles.add(p);
     }
 
     public void update(double dt, int screenWidth, int screenHeight, List<Projectile> projectiles, List<Projectile> projectilePool, Game game) {
@@ -45,6 +62,26 @@ public class EnemyManager {
         for (Enemy enemy : enemies) {
             enemy.update(dt);
             enemy.clampToScreen(screenWidth, screenHeight);
+        }
+
+        // Update Enemy Projectiles
+        Iterator<EnemyProjectile> epIterator = enemyProjectiles.iterator();
+        while (epIterator.hasNext()) {
+            EnemyProjectile ep = epIterator.next();
+            ep.update(dt);
+            
+            // Check collision with Player
+            if (player != null && Circle.isColliding(player, ep)) {
+                game.onPlayerHit(null); // Passing null as ep is not an enemy entity
+                enemyProjectilePool.add(ep);
+                epIterator.remove();
+                continue;
+            }
+            
+            if (ep.isOffScreen(screenWidth, screenHeight)) {
+                enemyProjectilePool.add(ep);
+                epIterator.remove();
+            }
         }
 
         splitEnemies.clear();
@@ -109,6 +146,9 @@ public class EnemyManager {
         for (Enemy enemy : enemies) {
             enemy.draw(canvas);
         }
+        for (EnemyProjectile ep : enemyProjectiles) {
+            ep.draw(canvas);
+        }
     }
 
     public void startNextWave(int waveNumber) {
@@ -119,12 +159,14 @@ public class EnemyManager {
     }
 
     public boolean isWaveCleared() {
-        return enemiesToSpawn == 0 && enemies.isEmpty();
+        return enemiesToSpawn == 0 && enemies.isEmpty() && enemyProjectiles.isEmpty();
     }
 
     public void reset() {
         enemyPool.addAll(enemies);
         enemies.clear();
+        enemyProjectilePool.addAll(enemyProjectiles);
+        enemyProjectiles.clear();
         enemiesToSpawn = 0;
         spawnTimer = 0;
     }
@@ -162,12 +204,20 @@ public class EnemyManager {
     }
 
     private EnemyType pickEnemyType() {
-        int roll = random.nextInt(100);
-        // SPLITTER available from Wave 1 as requested
-        if (roll < 10) return EnemyType.SPLITTER;
-        if (waveNumber >= 4 && roll < 25) return EnemyType.ZIGZAG;
-        if (waveNumber >= 3 && roll < 35) return EnemyType.TANK;
-        if (waveNumber >= 2 && roll < 50) return EnemyType.FAST;
+        int totalWeight = 0;
+        for (EnemyType type : EnemyType.values()) {
+            totalWeight += type.getBaseWeight();
+        }
+
+        int roll = random.nextInt(totalWeight);
+        int currentSum = 0;
+        for (EnemyType type : EnemyType.values()) {
+            currentSum += type.getBaseWeight();
+            if (roll < currentSum) {
+                return type;
+            }
+        }
+
         return EnemyType.NORMAL;
     }
 

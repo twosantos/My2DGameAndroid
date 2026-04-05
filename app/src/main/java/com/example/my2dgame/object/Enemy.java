@@ -8,7 +8,7 @@ import android.graphics.Paint;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffColorFilter;
 import android.graphics.Rect;
-import com.example.my2dgame.Constants;
+import com.example.my2dgame.EnemyManager;
 import com.example.my2dgame.EnemyType;
 import com.example.my2dgame.R;
 import com.example.my2dgame.SpriteCache;
@@ -17,11 +17,14 @@ public class Enemy extends Circle {
 
     private static final double BASE_SPEED_PPS = 400.0 * 0.7;
     private static final int FLASH_DURATION = 4;
+    private static final int SNIPER_FIRE_INTERVAL = 90; // 3 seconds at 30 UPS
 
     private final Player player;
+    private final Context context;
     private EnemyType type;
     private double maxSpeed;
     private int zigzagTimer = 0;
+    private int fireTimer = 0;
     
     private int health;
     private int maxHealth;
@@ -40,6 +43,7 @@ public class Enemy extends Circle {
     public Enemy(int color, Player player, double positionX, double positionY, float radius, EnemyType type, Context context) {
         super(color, positionX, positionY, radius);
         this.player = player;
+        this.context = context;
         this.type = type;
         this.maxSpeed = BASE_SPEED_PPS * type.getSpeedMultiplier();
         this.isBoss = false;
@@ -94,6 +98,7 @@ public class Enemy extends Circle {
         this.type = type;
         this.maxSpeed = BASE_SPEED_PPS * type.getSpeedMultiplier();
         this.zigzagTimer = 0;
+        this.fireTimer = 0;
         this.velocityX = 0;
         this.velocityY = 0;
         this.paint.setColor(color);
@@ -120,16 +125,42 @@ public class Enemy extends Circle {
             double directionX = distanceToTargetX / distanceToTarget;
             double directionY = distanceToTargetY / distanceToTarget;
 
-            if (type == EnemyType.ZIGZAG) {
+            double currentMaxSpeed = maxSpeed;
+
+            // Balanced AI: Kamikaze rush (Lowered from 2.5x to 1.8x)
+            if (type == EnemyType.KAMIKAZE && distanceToTarget < 500) {
+                currentMaxSpeed *= 1.8; 
+            }
+
+            if (type == EnemyType.SNIPER) {
+                // Sniper logic: Keep distance and shoot
+                if (distanceToTarget > 700) {
+                    velocityX = directionX * currentMaxSpeed;
+                    velocityY = directionY * currentMaxSpeed;
+                } else if (distanceToTarget < 500) {
+                    velocityX = -directionX * currentMaxSpeed;
+                    velocityY = -directionY * currentMaxSpeed;
+                } else {
+                    velocityX = 0;
+                    velocityY = 0;
+                }
+                
+                // Sniper Shooting
+                fireTimer++;
+                if (fireTimer >= SNIPER_FIRE_INTERVAL) {
+                    EnemyManager.spawnEnemyProjectile(positionX, positionY, directionX, directionY, context);
+                    fireTimer = 0;
+                }
+            } else if (type == EnemyType.ZIGZAG) {
                 zigzagTimer++;
                 double perpX = -directionY;
                 double perpY = directionX;
                 double zigzag = Math.sin(zigzagTimer * 0.15) * 0.8;
-                velocityX = (directionX + perpX * zigzag) * maxSpeed;
-                velocityY = (directionY + perpY * zigzag) * maxSpeed;
+                velocityX = (directionX + perpX * zigzag) * currentMaxSpeed;
+                velocityY = (directionY + perpY * zigzag) * currentMaxSpeed;
             } else {
-                velocityX = directionX * maxSpeed;
-                velocityY = directionY * maxSpeed;
+                velocityX = directionX * currentMaxSpeed;
+                velocityY = directionY * currentMaxSpeed;
             }
         } else {
             velocityX = 0;
