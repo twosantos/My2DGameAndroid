@@ -65,7 +65,7 @@ Players choose a "Hull Type" in the Hangar. This uses a `ShipProfile` configurat
 - [x] **Task 3.2**: Implement `drawHangar()` in `UIManager.java`.
 - [x] **Task 3.3**: Implement responsive touch logic for UI.
 
-### Phase 4: Milestone Unlocks & Gating
+### Phase 4: Milestone Unlocks & Gating (DONE)
 - [x] **Task 4.1**: **Persistence Layer Expansion**
     - Expand `SaveManager.java` to track `max_wave_reached`.
     - Add `owned_ships_mask` (int bitmask) to track which ships have been purchased.
