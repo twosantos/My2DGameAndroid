@@ -81,11 +81,12 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
 
         saveManager = new SaveManager(context);
         uiManager = new UIManager(context);
-        projectileManager = new ProjectileManager(context);
+        projectileManager = new ProjectileManager(context, saveManager);
         particleManager = new ParticleManager(context);
         scrapManager = new ScrapManager();
         
         soundManager = new SoundManager(context);
+        soundManager.setMuted(saveManager.isMuted());
         soundManager.startMusic();
 
         // Load persisted ship selection
@@ -96,6 +97,9 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
             R.drawable.spaceship,
             R.drawable.asteroid,
             R.drawable.rocket,
+            R.drawable.tank,
+            R.drawable.assasin,
+            R.drawable.engineer,
             R.drawable.spiky_explosion
         );
 
@@ -121,7 +125,9 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
 
     public void onPlayerHit(Enemy enemy) {
         player.takeDamage();
-        particleManager.spawnExplosion(enemy.positionX(), enemy.positionY(), enemy.getType().getColor());
+        particleManager.spawnExplosion(enemy != null ? enemy.positionX() : player.positionX(), 
+                                     enemy != null ? enemy.positionY() : player.positionY(), 
+                                     enemy != null ? enemy.getType().getColor() : Color.RED);
         soundManager.playHit();
         damageFlashTimer = Constants.DAMAGE_FLASH_DURATION;
         triggerShake(Constants.BOSS_SHAKE_DURATION, Constants.BOSS_SHAKE_INTENSITY);
@@ -161,6 +167,9 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
             case HANGAR:
                 if (handleHangarTouch(x, y)) return true;
                 break;
+            case SETTINGS:
+                if (handleSettingsTouch(x, y)) return true;
+                break;
             case GAME_OVER:
                 if (System.currentTimeMillis() - gameOverTimestamp >= GAME_OVER_COOLDOWN_MS) {
                     gameState = GameState.MENU;
@@ -180,21 +189,23 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         float centerY = screenHeight / 2f;
         float centerX = screenWidth / 2f;
         
-        if (y > centerY - 50 && y < centerY + 150) {
+        // Ship Selection cycling logic
+        if (y > centerY - screenHeight * 0.05f && y < centerY + screenHeight * 0.15f) {
             int shipCount = ShipProfile.values().length;
             int currentIndex = selectedProfile.ordinal();
-            if (x < centerX - 100) {
+            if (x < centerX - screenWidth * 0.15f) {
                 currentIndex = (currentIndex - 1 + shipCount) % shipCount;
                 selectedProfile = ShipProfile.values()[currentIndex];
                 saveManager.setSelectedShipIndex(currentIndex);
                 return true;
-            } else if (x > centerX + 100) {
+            } else if (x > centerX + screenWidth * 0.15f) {
                 currentIndex = (currentIndex + 1) % shipCount;
                 selectedProfile = ShipProfile.values()[currentIndex];
                 saveManager.setSelectedShipIndex(currentIndex);
                 return true;
             }
             
+            // Purchase logic for unowned ships
             if (!selectedProfile.isOwned(saveManager) && selectedProfile.isUnlocked(saveManager)) {
                 if (saveManager.spendScrap(selectedProfile.getScrapPrice())) {
                     saveManager.setShipOwned(selectedProfile.ordinal());
@@ -204,17 +215,28 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
             }
         }
 
-        if (x > centerX - 150 && x < centerX + 150 && y > screenHeight - 250 && y < screenHeight - 150) {
+        // Responsive HANGAR Button Hitbox
+        if (x > screenWidth * 0.2f && x < screenWidth * 0.45f && 
+            y > screenHeight * 0.8f && y < screenHeight * 0.9f) {
             gameState = GameState.HANGAR;
             return true;
         }
 
-        if (x > screenWidth - 250 && y > screenHeight - 150) {
+        // Responsive SETTINGS Button Hitbox
+        if (x > screenWidth * 0.55f && x < screenWidth * 0.8f && 
+            y > screenHeight * 0.8f && y < screenHeight * 0.9f) {
+            gameState = GameState.SETTINGS;
+            return true;
+        }
+
+        // EXIT Button Hitbox
+        if (x > screenWidth * 0.85f && y > screenHeight * 0.85f) {
             exitGame();
             return true;
         }
         
-        if (y < screenHeight - 300 && selectedProfile.isOwned(saveManager)) {
+        // Start Game (Only if owned)
+        if (y < screenHeight * 0.7f && selectedProfile.isOwned(saveManager)) {
             startGame();
             return true;
         }
@@ -222,22 +244,72 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
     }
 
     private boolean handleHangarTouch(float x, float y) {
-        float startX = screenWidth * 0.1f;
         float startY = screenHeight * 0.3f;
         float spacingY = screenHeight * 0.12f;
         float buyButtonX = screenWidth * 0.7f;
+        float buyButtonW = screenWidth * 0.2f;
 
-        if (x > buyButtonX && x < buyButtonX + screenWidth * 0.2f) {
-            if (y > startY - 40 && y < startY + 40) tryUpgrade(SaveManager.UPGRADE_HULL);
-            else if (y > startY + spacingY - 40 && y < startY + spacingY + 40) tryUpgrade(SaveManager.UPGRADE_SPEED);
-            else if (y > startY + spacingY * 2 - 40 && y < startY + spacingY * 2 + 40) tryUpgrade(SaveManager.UPGRADE_FIRE);
-            else if (y > startY + spacingY * 3 - 40 && y < startY + spacingY * 3 + 40) tryUpgrade(SaveManager.UPGRADE_MAGNET);
-            else if (y > startY + spacingY * 4 - 40 && y < startY + spacingY * 4 + 40) tryUpgrade(SaveManager.UPGRADE_BATTERY);
+        // Check each upgrade button
+        if (x > buyButtonX && x < buyButtonX + buyButtonW) {
+            for (int i = 0; i < 5; i++) {
+                float rowY = startY + i * spacingY;
+                if (y > rowY - 40 && y < rowY + 40) {
+                    switch(i) {
+                        case 0: tryUpgrade(SaveManager.UPGRADE_HULL); break;
+                        case 1: tryUpgrade(SaveManager.UPGRADE_SPEED); break;
+                        case 2: tryUpgrade(SaveManager.UPGRADE_FIRE); break;
+                        case 3: tryUpgrade(SaveManager.UPGRADE_MAGNET); break;
+                        case 4: tryUpgrade(SaveManager.UPGRADE_BATTERY); break;
+                    }
+                    return true;
+                }
+            }
+        }
+
+        // Back Button
+        if (x > screenWidth * 0.05f && x < screenWidth * 0.2f && 
+            y > screenHeight * 0.85f && y < screenHeight * 0.95f) {
+            gameState = GameState.MENU;
             return true;
         }
 
-        if (x > screenWidth * 0.05f && x < screenWidth * 0.2f && y > screenHeight - 150 && y < screenHeight - 50) {
+        return false;
+    }
+
+    private boolean handleSettingsTouch(float x, float y) {
+        float startY = screenHeight * 0.35f;
+        float spacingY = screenHeight * 0.15f;
+        float toggleX = screenWidth * 0.65f;
+        float toggleW = screenWidth * 0.15f;
+
+        // Settings toggles
+        if (x > toggleX && x < toggleX + toggleW) {
+            if (y > startY - 40 && y < startY + 40) {
+                saveManager.setMuted(!saveManager.isMuted());
+                soundManager.setMuted(saveManager.isMuted());
+            } else if (y > startY + spacingY - 40 && y < startY + spacingY + 40) {
+                saveManager.setRetroMode(!saveManager.isRetroMode());
+            } else if (y > startY + spacingY * 2 - 40 && y < startY + spacingY * 2 + 40) {
+                saveManager.setShakeEnabled(!saveManager.isShakeEnabled());
+            }
+            return true;
+        }
+
+        // Back Button
+        if (x > screenWidth * 0.05f && x < screenWidth * 0.2f && 
+            y > screenHeight * 0.85f && y < screenHeight * 0.95f) {
             gameState = GameState.MENU;
+            return true;
+        }
+
+        // Clear Data
+        if (x > screenWidth * 0.65f && x < screenWidth * 0.95f && 
+            y > screenHeight * 0.85f && y < screenHeight * 0.95f) {
+            saveManager.clearAllData();
+            // Refresh state
+            int shipIndex = saveManager.getSelectedShipIndex();
+            selectedProfile = ShipProfile.values()[shipIndex];
+            soundManager.setMuted(saveManager.isMuted());
             return true;
         }
 
@@ -257,7 +329,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
     }
 
     private boolean handlePauseTouch(float x, float y) {
-        if (x > screenWidth / 2f - 150 && x < screenWidth / 2f + 150 && y > screenHeight - 200) {
+        if (x > screenWidth * 0.35f && x < screenWidth * 0.65f && y > screenHeight * 0.85f) {
             exitGame();
             return true;
         }
@@ -382,7 +454,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
             player = new Player(getContext(), saveManager, selectedProfile, joystick, screenWidth / 2.0, screenHeight / 2.0, (float) (screenHeight * 0.035));
         }
         if (enemyManager == null) {
-            enemyManager = new EnemyManager(getContext(), player);
+            enemyManager = new EnemyManager(getContext(), player, saveManager);
         }
 
         if (gameLoop == null || !gameLoop.isAlive()) {
@@ -409,6 +481,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         switch (gameState) {
             case MENU: uiManager.drawMenu(canvas, screenWidth, screenHeight, parallaxLayers, saveManager.getHighScore(), startingWave, selectedProfile, saveManager); break;
             case HANGAR: uiManager.drawHangar(canvas, screenWidth, screenHeight, saveManager); break;
+            case SETTINGS: uiManager.drawSettings(canvas, screenWidth, screenHeight, saveManager); break;
             case PLAYING: drawPlaying(canvas); break;
             case PAUSED: drawPlaying(canvas); uiManager.drawPauseOverlay(canvas, screenWidth, screenHeight); break;
             case GAME_OVER: uiManager.drawGameOver(canvas, screenWidth, screenHeight, score, saveManager.getHighScore(), isNewHighScore); break;
@@ -417,13 +490,15 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
 
     private void drawPlaying(Canvas canvas) {
         canvas.drawColor(Color.rgb(5, 5, 15));
-        boolean shaking = shakeTimer > 0;
+        
+        boolean shaking = shakeTimer > 0 && saveManager.isShakeEnabled();
         if (shaking) {
             float progress = (float) shakeTimer / currentShakeDuration;
             float intensity = progress * currentShakeIntensity;
             canvas.save();
             canvas.translate((random.nextFloat() * 2 - 1) * intensity, (random.nextFloat() * 2 - 1) * intensity);
         }
+        
         if (parallaxLayers != null) { for (ParallaxLayer layer : parallaxLayers) layer.draw(canvas); }
         if (player != null) player.draw(canvas);
         enemyManager.draw(canvas);
@@ -434,6 +509,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         for (FloatingText ft : floatingTexts) ft.draw(canvas);
         if (joystick != null) joystick.draw(canvas);
         if (aimJoystick != null) aimJoystick.draw(canvas);
+        
         if (shaking) canvas.restore();
 
         if (damageFlashTimer > 0) canvas.drawColor(Color.argb(100, 255, 0, 0));
@@ -444,6 +520,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
     public void update(double dt) {
         if (parallaxLayers != null) { for (ParallaxLayer layer : parallaxLayers) layer.update(dt); }
         if (gameState != GameState.PLAYING) return;
+        
         if (damageFlashTimer > 0) damageFlashTimer--;
         if (shakeTimer > 0) shakeTimer--;
         if (scorePopTimer > 0) scorePopTimer--;
@@ -452,6 +529,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
             if (waveBreakTimer == 0) startNextWave();
         }
         if (waveAnnouncementTimer > 0) waveAnnouncementTimer--;
+
         if (joystick != null) joystick.update();
         if (aimJoystick != null) aimJoystick.update();
         if (player != null) {

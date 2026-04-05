@@ -27,12 +27,15 @@ public class UIManager {
     private final Paint scrapCountPaint;
     private final Paint shipDescriptionPaint;
     private final Paint lockOverlayPaint;
+    private final Paint settingsLabelPaint;
+    private final Paint togglePaint;
     
     private final HealthBar healthBar;
     private final Context context;
     private final RectF timerRect = new RectF();
     private final RectF upgradeButtonRect = new RectF();
     private final RectF genericButtonRect = new RectF();
+    private final RectF toggleRect = new RectF();
 
     public UIManager(Context context) {
         this.context = context;
@@ -85,6 +88,7 @@ public class UIManager {
 
         scrapCountPaint = new Paint();
         scrapCountPaint.setColor(Color.GREEN);
+        scrapCountPaint.setTextSize(60);
         scrapCountPaint.setTextAlign(Paint.Align.RIGHT);
         scrapCountPaint.setFakeBoldText(true);
 
@@ -95,6 +99,14 @@ public class UIManager {
         lockOverlayPaint = new Paint();
         lockOverlayPaint.setColor(Color.argb(200, 0, 0, 0));
         lockOverlayPaint.setStyle(Paint.Style.FILL);
+
+        settingsLabelPaint = new Paint();
+        settingsLabelPaint.setColor(Color.WHITE);
+        settingsLabelPaint.setTextAlign(Paint.Align.LEFT);
+
+        togglePaint = new Paint();
+        togglePaint.setStyle(Paint.Style.FILL);
+        togglePaint.setAntiAlias(true);
 
         healthBar = new HealthBar(context);
     }
@@ -114,6 +126,7 @@ public class UIManager {
         scrapCountPaint.setTextSize(60 * scale);
         shipDescriptionPaint.setTextSize(45 * scale);
         statsPaint.setTextSize(35 * scale);
+        settingsLabelPaint.setTextSize(50 * scale);
     }
 
     public void drawMenu(Canvas canvas, int screenWidth, int screenHeight, List<ParallaxLayer> parallaxLayers, int highScore, int startingWave, ShipProfile selectedProfile, SaveManager saveManager) {
@@ -126,7 +139,6 @@ public class UIManager {
         canvas.drawText("<", screenWidth * 0.35f, centerY + 20, selectorPaint);
         canvas.drawText(">", screenWidth * 0.65f, centerY + 20, selectorPaint);
         
-        // Task 4.3: Menu Gating Visuals
         boolean isUnlocked = selectedProfile.isUnlocked(saveManager);
         boolean isOwned = selectedProfile.isOwned(saveManager);
 
@@ -145,19 +157,23 @@ public class UIManager {
         
         float btnW = screenWidth * 0.25f;
         float btnH = screenHeight * 0.1f;
-        genericButtonRect.set(screenWidth / 2f - btnW/2, screenHeight * 0.8f, screenWidth / 2f + btnW/2, screenHeight * 0.8f + btnH);
+        
+        // HANGAR button
+        genericButtonRect.set(screenWidth * 0.2f, screenHeight * 0.8f, screenWidth * 0.45f, screenHeight * 0.8f + btnH);
         canvas.drawRect(genericButtonRect, buttonPaint);
-        canvas.drawText("HANGAR", screenWidth / 2f, screenHeight * 0.8f + btnH * 0.65f, buttonPaint);
+        canvas.drawText("HANGAR", screenWidth * 0.325f, screenHeight * 0.8f + btnH * 0.65f, buttonPaint);
+
+        // SETTINGS button
+        genericButtonRect.set(screenWidth * 0.55f, screenHeight * 0.8f, screenWidth * 0.8f, screenHeight * 0.8f + btnH);
+        canvas.drawRect(genericButtonRect, buttonPaint);
+        canvas.drawText("SETTINGS", screenWidth * 0.675f, screenHeight * 0.8f + btnH * 0.65f, buttonPaint);
 
         if (highScore > 0) canvas.drawText("Best: " + highScore, screenWidth * 0.1f, screenHeight * 0.1f, scorePaint);
-        
-        // EXIT Button responsive hitbox area
         canvas.drawText("EXIT", screenWidth * 0.9f, screenHeight * 0.9f, buttonPaint);
     }
 
     public void drawHangar(Canvas canvas, int screenWidth, int screenHeight, SaveManager saveManager) {
         canvas.drawColor(Color.rgb(10, 10, 30));
-        
         canvas.drawText("SHIP HANGAR", screenWidth / 2f, screenHeight * 0.15f, titlePaint);
         canvas.drawText("SCRAP: " + saveManager.getTotalScrap(), screenWidth * 0.95f, screenHeight * 0.15f, scrapCountPaint);
 
@@ -176,6 +192,51 @@ public class UIManager {
         genericButtonRect.set(screenWidth * 0.05f, screenHeight * 0.85f, screenWidth * 0.05f + backBtnW, screenHeight * 0.85f + backBtnH);
         canvas.drawRect(genericButtonRect, buttonPaint);
         canvas.drawText("BACK", screenWidth * 0.05f + backBtnW/2, screenHeight * 0.85f + backBtnH * 0.65f, buttonPaint);
+    }
+
+    public void drawSettings(Canvas canvas, int screenWidth, int screenHeight, SaveManager saveManager) {
+        canvas.drawColor(Color.rgb(20, 20, 40));
+        canvas.drawText("SETTINGS", screenWidth / 2f, screenHeight * 0.15f, titlePaint);
+
+        float startX = screenWidth * 0.2f;
+        float startY = screenHeight * 0.35f;
+        float spacingY = screenHeight * 0.15f;
+
+        drawSettingToggle(canvas, "MUTE AUDIO", saveManager.isMuted(), startX, startY, screenWidth);
+        drawSettingToggle(canvas, "RETRO MODE", saveManager.isRetroMode(), startX, startY + spacingY, screenWidth);
+        drawSettingToggle(canvas, "SCREEN SHAKE", saveManager.isShakeEnabled(), startX, startY + spacingY * 2, screenWidth);
+
+        // BACK button
+        float backBtnW = screenWidth * 0.15f;
+        float backBtnH = screenHeight * 0.1f;
+        genericButtonRect.set(screenWidth * 0.05f, screenHeight * 0.85f, screenWidth * 0.05f + backBtnW, screenHeight * 0.85f + backBtnH);
+        canvas.drawRect(genericButtonRect, buttonPaint);
+        canvas.drawText("BACK", screenWidth * 0.05f + backBtnW/2, screenHeight * 0.85f + backBtnH * 0.65f, buttonPaint);
+
+        // CLEAR DATA button
+        float clearBtnW = screenWidth * 0.3f;
+        genericButtonRect.set(screenWidth * 0.65f, screenHeight * 0.85f, screenWidth * 0.65f + clearBtnW, screenHeight * 0.85f + backBtnH);
+        canvas.drawRect(genericButtonRect, buttonPaint);
+        canvas.drawText("CLEAR ALL DATA", screenWidth * 0.65f + clearBtnW/2, screenHeight * 0.85f + backBtnH * 0.65f, buttonPaint);
+    }
+
+    private void drawSettingToggle(Canvas canvas, String label, boolean enabled, float x, float y, int screenWidth) {
+        canvas.drawText(label, x, y, settingsLabelPaint);
+        
+        float toggleWidth = screenWidth * 0.15f;
+        float toggleHeight = 60;
+        float toggleX = screenWidth * 0.65f;
+        toggleRect.set(toggleX, y - toggleHeight/2 - 10, toggleX + toggleWidth, y + toggleHeight/2 - 10);
+        
+        // Draw background
+        togglePaint.setColor(Color.DKGRAY);
+        canvas.drawRoundRect(toggleRect, 30, 30, togglePaint);
+        
+        // Draw slider
+        togglePaint.setColor(enabled ? Color.CYAN : Color.GRAY);
+        float sliderSize = toggleHeight - 10;
+        float sliderX = enabled ? toggleX + toggleWidth - sliderSize - 5 : toggleX + 5;
+        canvas.drawCircle(sliderX + sliderSize/2, y - 10, sliderSize/2, togglePaint);
     }
 
     private void drawUpgradeRow(Canvas canvas, String label, String key, float x, float y, int screenWidth, SaveManager saveManager) {

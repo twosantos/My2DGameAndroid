@@ -25,15 +25,12 @@ public class EnemyManager {
     private final Random random = new Random();
     private final Context context;
     private final Player player;
+    private SaveManager saveManager;
 
-    private int spawnTimer = 0;
-    private int waveNumber = 0;
-    private int enemiesToSpawn = 0;
-    private boolean isBossWave = false;
-
-    public EnemyManager(Context context, Player player) {
+    public EnemyManager(Context context, Player player, SaveManager saveManager) {
         this.context = context;
         this.player = player;
+        this.saveManager = saveManager;
     }
 
     public static void spawnEnemyProjectile(double x, double y, double dirX, double dirY, Context context) {
@@ -151,6 +148,11 @@ public class EnemyManager {
         }
     }
 
+    private int spawnTimer = 0;
+    private int waveNumber = 0;
+    private int enemiesToSpawn = 0;
+    private boolean isBossWave = false;
+
     public void startNextWave(int waveNumber) {
         this.waveNumber = waveNumber;
         this.isBossWave = (waveNumber % 5 == 0);
@@ -200,7 +202,7 @@ public class EnemyManager {
             e.reset(color, x, y, radius, type);
             return e;
         }
-        return new Enemy(color, player, x, y, radius, type, context);
+        return new Enemy(color, player, x, y, radius, type, context, saveManager);
     }
 
     private EnemyType pickEnemyType() {

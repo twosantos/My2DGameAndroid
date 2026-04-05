@@ -16,9 +16,11 @@ public class ProjectileManager {
     private final List<Projectile> projectiles = new ArrayList<>();
     private final List<Projectile> pool = new ArrayList<>();
     private final Context context;
+    private final SaveManager saveManager;
 
-    public ProjectileManager(Context context) {
+    public ProjectileManager(Context context, SaveManager saveManager) {
         this.context = context;
+        this.saveManager = saveManager;
     }
 
     public void fire(double x, double y, float radius, double dirX, double dirY, Player player, EnemyManager enemyManager) {
@@ -41,7 +43,7 @@ public class ProjectileManager {
             p = pool.remove(pool.size() - 1);
             p.reset(x, y, radius, dirX, dirY);
         } else {
-            p = new Projectile(x, y, radius, dirX, dirY, context);
+            p = new Projectile(x, y, radius, dirX, dirY, context, saveManager);
         }
 
         if (player.hasHoming()) {

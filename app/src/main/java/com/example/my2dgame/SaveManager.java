@@ -5,7 +5,7 @@ import android.content.SharedPreferences;
 
 /**
  * Manages all persistent data for Star Defender, including high scores, 
- * currency (Scrap), permanent hangar upgrades, and milestones.
+ * currency (Scrap), permanent hangar upgrades, settings, and milestones.
  */
 public class SaveManager {
     private static final String PREF_NAME = "my2dgame_prefs";
@@ -17,6 +17,11 @@ public class SaveManager {
     private static final String KEY_MAX_WAVE = "max_wave_reached";
     private static final String KEY_OWNED_SHIPS = "owned_ships_mask";
     private static final String KEY_BOSSES_DEFEATED = "bosses_defeated_mask";
+    
+    // Settings Keys
+    private static final String KEY_IS_MUTED = "is_muted";
+    private static final String KEY_IS_RETRO_MODE = "is_retro_mode";
+    private static final String KEY_IS_SHAKE_ENABLED = "is_shake_enabled";
     
     // Upgrade Keys (0-5 levels)
     public static final String UPGRADE_HULL = "upg_hull";
@@ -128,5 +133,37 @@ public class SaveManager {
         int mask = getBossesDefeatedMask();
         mask |= (1 << bossIndex);
         prefs.edit().putInt(KEY_BOSSES_DEFEATED, mask).apply();
+    }
+
+    // --- Settings ---
+    public boolean isMuted() {
+        return prefs.getBoolean(KEY_IS_MUTED, false);
+    }
+
+    public void setMuted(boolean muted) {
+        prefs.edit().putBoolean(KEY_IS_MUTED, muted).apply();
+    }
+
+    public boolean isRetroMode() {
+        return prefs.getBoolean(KEY_IS_RETRO_MODE, false);
+    }
+
+    public void setRetroMode(boolean retroMode) {
+        prefs.edit().putBoolean(KEY_IS_RETRO_MODE, retroMode).apply();
+    }
+
+    public boolean isShakeEnabled() {
+        return prefs.getBoolean(KEY_IS_SHAKE_ENABLED, true);
+    }
+
+    public void setShakeEnabled(boolean enabled) {
+        prefs.edit().putBoolean(KEY_IS_SHAKE_ENABLED, enabled).apply();
+    }
+
+    public void clearAllData() {
+        prefs.edit().clear().apply();
+        // Set defaults
+        setShipOwned(0);
+        setShakeEnabled(true);
     }
 }

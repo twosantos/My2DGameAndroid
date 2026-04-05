@@ -18,6 +18,7 @@ public class SoundManager {
     private MediaPlayer musicPlayer;
     private final Context context;
     private boolean isPaused = false;
+    private boolean isMuted = false;
 
     public SoundManager(Context context) {
         this.context = context;
@@ -37,15 +38,27 @@ public class SoundManager {
         startSoundId = soundPool.load(context, R.raw.start, 1);
     }
 
+    public void setMuted(boolean muted) {
+        this.isMuted = muted;
+        if (isMuted) {
+            pauseMusic();
+        } else {
+            resumeMusic();
+        }
+    }
+
     public void playHit() {
+        if (isMuted) return;
         soundPool.play(hitSoundId, 1f, 1f, 1, 0, 1f);
     }
 
     public void playGameOver() {
+        if (isMuted) return;
         soundPool.play(gameOverSoundId, 1f, 1f, 1, 0, 1f);
     }
 
     public void playStart() {
+        if (isMuted) return;
         soundPool.play(startSoundId, 1f, 1f, 1, 0, 1f);
     }
 
@@ -56,7 +69,9 @@ public class SoundManager {
         musicPlayer = MediaPlayer.create(context, R.raw.main_menu_loop);
         musicPlayer.setLooping(true);
         musicPlayer.setVolume(0.5f, 0.5f);
-        musicPlayer.start();
+        if (!isMuted) {
+            musicPlayer.start();
+        }
         isPaused = false;
     }
 
@@ -68,6 +83,7 @@ public class SoundManager {
     }
 
     public void resumeMusic() {
+        if (isMuted) return;
         if (musicPlayer != null && isPaused) {
             musicPlayer.start();
             isPaused = false;

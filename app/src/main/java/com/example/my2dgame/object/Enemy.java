@@ -11,6 +11,7 @@ import android.graphics.Rect;
 import com.example.my2dgame.EnemyManager;
 import com.example.my2dgame.EnemyType;
 import com.example.my2dgame.R;
+import com.example.my2dgame.SaveManager;
 import com.example.my2dgame.SpriteCache;
 
 public class Enemy extends Circle {
@@ -21,6 +22,7 @@ public class Enemy extends Circle {
 
     private final Player player;
     private final Context context;
+    private final SaveManager saveManager;
     private EnemyType type;
     private double maxSpeed;
     private int zigzagTimer = 0;
@@ -40,10 +42,11 @@ public class Enemy extends Circle {
     private PorterDuffColorFilter tintFilter;
     private final PorterDuffColorFilter flashFilter = new PorterDuffColorFilter(Color.WHITE, PorterDuff.Mode.SRC_ATOP);
 
-    public Enemy(int color, Player player, double positionX, double positionY, float radius, EnemyType type, Context context) {
+    public Enemy(int color, Player player, double positionX, double positionY, float radius, EnemyType type, Context context, SaveManager saveManager) {
         super(color, positionX, positionY, radius);
         this.player = player;
         this.context = context;
+        this.saveManager = saveManager;
         this.type = type;
         this.maxSpeed = BASE_SPEED_PPS * type.getSpeedMultiplier();
         this.isBoss = false;
@@ -184,13 +187,17 @@ public class Enemy extends Circle {
         canvas.save();
         canvas.rotate(rotationAngle, (float) positionX, (float) positionY);
         
-        if (flashTimer > 0) {
-            spritePaint.setColorFilter(flashFilter);
+        if (!saveManager.isRetroMode() && sprite != null) {
+            if (flashTimer > 0) {
+                spritePaint.setColorFilter(flashFilter);
+            } else {
+                spritePaint.setColorFilter(tintFilter);
+            }
+            canvas.drawBitmap(sprite, null, dstRect, spritePaint);
         } else {
-            spritePaint.setColorFilter(tintFilter);
+            // Retro Mode: Draw primitive shape
+            canvas.drawCircle((float) positionX, (float) positionY, radius, paint);
         }
-
-        canvas.drawBitmap(sprite, null, dstRect, spritePaint);
         canvas.restore();
 
         if (isBoss) {

@@ -217,19 +217,22 @@ public class Player extends Circle {
     public void draw(Canvas canvas) {
         engineTrail.draw(canvas);
 
-        dstRect.set(
-            (int) (positionX - radius),
-            (int) (positionY - radius),
-            (int) (positionX + radius),
-            (int) (positionY + radius)
-        );
-        
-        canvas.save();
-        canvas.rotate(rotationAngle, (float) positionX, (float) positionY);
-        if (sprite != null) {
+        if (!saveManager.isRetroMode() && sprite != null) {
+            dstRect.set(
+                (int) (positionX - radius),
+                (int) (positionY - radius),
+                (int) (positionX + radius),
+                (int) (positionY + radius)
+            );
+            
+            canvas.save();
+            canvas.rotate(rotationAngle, (float) positionX, (float) positionY);
             canvas.drawBitmap(sprite, null, dstRect, spritePaint);
+            canvas.restore();
+        } else {
+            // Retro Mode: Draw primitive shape
+            canvas.drawCircle((float) positionX, (float) positionY, radius, paint);
         }
-        canvas.restore();
 
         if (shieldTimer > 0) {
             canvas.drawCircle((float)positionX, (float)positionY, radius + 10, shieldPaint);
